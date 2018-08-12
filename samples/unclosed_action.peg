@@ -1,0 +1,5 @@
+
+root:
+    term { "we forgot the closing brace"
+;
+# It would be nice to be able to make it to here

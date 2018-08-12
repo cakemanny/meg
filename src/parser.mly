@@ -18,12 +18,11 @@ open Tree
 %token DOT
 %token LT
 %token GT
-%token LBRACE
-%token RBRACE
 
 %token <string> IDENT
 %token <string> CLASS
 %token <string> LITERAL
+%token <string> BRACES
 
 %token <string> DECLARATION
 %token <string> TRAILER
@@ -44,7 +43,7 @@ grammar:
     | Some trail -> ds @ [trail]
     | None -> ds
   }
-| error { Printf.eprintf("AN ERROR!!"); [] }
+| error { Printf.eprintf("There was an error in your syntax\n"); [] }
 ;
 declaration:
   d=DECLARATION { Declaration d }
@@ -53,7 +52,7 @@ trailer:
   t=TRAILER { Trailer t }
 ;
 definition:
-  n=IDENT COLON e=expression SEMI { Definition (Rule (n,e)) }
+  n=IDENT COLON e=expression SEMI? { Definition (Rule (n,e)) }
 ;
 expression:
   a = separated_nonempty_list(BAR, sequence) { Alternate a }
@@ -62,9 +61,10 @@ sequence:
   s = prefix* { Sequence s }
 ;
 prefix:
-  s=suffix { s }
+  AMP pred=BRACES { Predicate pred }
 | AMP s=suffix { PeekNot s }
 | NOT s=suffix  { PeekNot s }
+| s=suffix { s }
 ;
 suffix:
   p=primary { p }
@@ -73,10 +73,13 @@ suffix:
 | p=primary PLUS { NonEmptyRepeat p }
 ;
 primary:
-  i=IDENT (* !: *) { Name i }
+| varname=IDENT EQUAL name=IDENT (* !: *) { Name (name, Some varname) }
+| name=IDENT (* !: *) { Name (name, None) }
 | LPAREN e=expression RPAREN { e }
 | l=LITERAL { Literal l }
 | c=CLASS { Class c }
 | DOT { Any }
-
+| text=BRACES { Action text  }
+| LT e=expression GT { Capture e }
+;
 %%

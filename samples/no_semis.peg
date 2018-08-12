@@ -1,0 +1,10 @@
+
+prod:
+    term
+
+term:
+    expression
+
+expression:
+    "something"
+
