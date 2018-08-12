@@ -4,6 +4,7 @@ let parse_and_print filename =
   let channel = open_in filename in
   try
     let lexbuf = Lexing.from_channel channel in
+    let lexbuf = Lexer.set_filename filename lexbuf in
     try
       let result = Parser.grammar Lexer.token lexbuf in
       List.iter (

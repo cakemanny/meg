@@ -2,7 +2,23 @@
 
 open Parser
 
+let sprintf = Printf.sprintf
+
 exception SyntaxError of string
+
+let position lexbuf =
+  let open Lexing in
+  let p = lexbuf.lex_curr_p in
+  sprintf "%s:%d:%d" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol)
+
+let set_filename (fname:string) (lexbuf) =
+  let open Lexing in
+  lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = fname };
+  lexbuf
+
+let error lexbuf fmt =
+  Printf.kprintf (fun msg ->
+      raise (SyntaxError ((position lexbuf)^" "^msg))) fmt
 
 }
 
@@ -28,15 +44,18 @@ let comment
 
 rule _token = parse
   | "%{"              {read_declaration (Buffer.create 256) lexbuf}
-  | "%}"              {raise @@ SyntaxError ("Unmatched '%}'")}
+  | "%}"              {raise @@ error lexbuf "Unmatched '%%}'"}
   | "%%" _* as trail  {TRAILER (String.sub trail 2 @@ (String.length trail - 2))}
   | '{' { BRACES (Buffer.contents @@ read_braces 0 (Buffer.create 32) lexbuf) }
-  | '}'  {raise @@ SyntaxError ("Unmatched '}'")}
+  | '}'  {error lexbuf "Unmatched '}'"}
 
   | identifier as i   {IDENT i}
   | '"'  {read_literal_dbl (Buffer.create 17) lexbuf}
   | '\'' {read_literal_sgl (Buffer.create 17) lexbuf}
-  | clazz as c {CLASS c}
+  | clazz as lxm { for i = 0 to (String.length lxm) - 1 do
+                     if lxm.[i] = '\n' then Lexing.new_line lexbuf
+                   done;
+                   CLASS lxm}
   | '='  {EQUAL}
   | ':'  {COLON}
   | ';'  {SEMI}
@@ -55,7 +74,7 @@ rule _token = parse
   | [' ' '\t' '\r']+ {_token lexbuf}
   | '\n' {Lexing.new_line lexbuf; _token lexbuf}
   | eof {EOF}
-  | _  {raise @@ SyntaxError ("Illegal character: " ^ (Lexing.lexeme lexbuf) )}
+  | _  as c {error lexbuf "Illegal character: %c" c }
 
 and read_literal_dbl buf =
   parse
@@ -65,12 +84,13 @@ and read_literal_dbl buf =
   | '\\' 'n'  { Buffer.add_char buf '\n'; read_literal_dbl buf lexbuf }
   | '\\' 'r'  { Buffer.add_char buf '\r'; read_literal_dbl buf lexbuf }
   | '\\' 't'  { Buffer.add_char buf '\t'; read_literal_dbl buf lexbuf }
-  | [^ '"' '\\']+
+  | '\n'      { Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_literal_dbl buf lexbuf }
+  | [^ '"' '\\' '\n']+
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_literal_dbl buf lexbuf
     }
-  | eof { raise (SyntaxError ("Literal is not terminated")) }
-  | _ { raise (SyntaxError ("Illegal literal character: " ^ Lexing.lexeme lexbuf)) }
+  | eof { error lexbuf "Literal is not terminated" }
+  | _ as c { error lexbuf "Illegal character in literal: %c" c }
 
 and read_literal_sgl buf =
   parse
@@ -80,31 +100,33 @@ and read_literal_sgl buf =
   | '\\' 'n'  { Buffer.add_char buf '\n'; read_literal_sgl buf lexbuf }
   | '\\' 'r'  { Buffer.add_char buf '\r'; read_literal_sgl buf lexbuf }
   | '\\' 't'  { Buffer.add_char buf '\t'; read_literal_sgl buf lexbuf }
-  | [^ '\'' '\\']+
+  | '\n'      { Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_literal_sgl buf lexbuf }
+  | [^ '"' '\\' '\n']+
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_literal_sgl buf lexbuf
     }
-  | eof { raise (SyntaxError ("Literal is not terminated")) }
-  | _ { raise (SyntaxError ("Illegal literal character: " ^ Lexing.lexeme lexbuf)) }
+  | eof { error lexbuf "Literal is not terminated" }
+  | _ as c { error lexbuf "Illegal characer in literal: %c" c }
 
 and read_declaration buf =
   parse
   | "%}" { DECLARATION (Buffer.contents buf) }
+  | '\n' { Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_declaration buf lexbuf }
   (* More efficient to add a big string while we are guaranteeds no end *)
-  | [^ '%']+ as s { Buffer.add_string buf s; read_declaration buf lexbuf }
+  | [^ '\n' '%']+ as s { Buffer.add_string buf s; read_declaration buf lexbuf }
   | _ as c { Buffer.add_char buf c; read_declaration buf lexbuf  }
-  | eof { raise (SyntaxError ("Declaration section not terminated"))}
+  | eof { error lexbuf "Declaration section not terminated" }
 
 and read_braces level buf =
   parse
 | '}' { if level = 0 then buf else (Buffer.add_char buf '}'; read_braces (level - 1) buf lexbuf) }
 | '{' { Buffer.add_char buf '}'; read_braces (level + 1) buf lexbuf }
+| '\n'{ Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_braces level buf lexbuf }
 | _ as c { Buffer.add_char buf c; read_braces level buf lexbuf }
-| eof { raise (SyntaxError ("Action not terminated"))}
+| eof { error lexbuf "Action not terminated" }
 
 {
 
-let sprintf = Printf.sprintf
 
 let string_of_tok = function
   | EQUAL -> "EQUAL"
