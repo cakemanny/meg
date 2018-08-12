@@ -1,0 +1,17 @@
+%{
+
+Some declaration!
+
+%}
+
+dan:
+    happy
+| sad and bad
+;
+
+josh:
+    happy*
+
+%%
+
+Some trailer!

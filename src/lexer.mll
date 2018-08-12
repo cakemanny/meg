@@ -1,7 +1,6 @@
 {
 
 open Parser
-module Lexing
 
 exception SyntaxError of string
 
@@ -24,7 +23,7 @@ let comment     = '#' [^ '\n']* '\n'
 ;;
 *)
 
-rule token = parse
+rule _token = parse
 | "%{"              {read_declaration (Buffer.create 256) lexbuf}
 | "%%" _* as trail  {TRAILER trail}
 
@@ -48,10 +47,11 @@ rule token = parse
 | '>'  {GT}
 | '{'  {LBRACE}
 | '}'  {RBRACE}
-| comment {Lexing.new_line lexbuf; token lexbuf}
-| [' ' '\t' '\r'] {tokex lexbuf}
-| '\n' {Lexing.new_line lexbuf; token lexbuf}
+| comment {Lexing.new_line lexbuf; _token lexbuf}
+| [' ' '\t' '\r'] {_token lexbuf}
+| '\n' {Lexing.new_line lexbuf; _token lexbuf}
 | eof {EOF}
+| _  {raise @@ SyntaxError ("Illegal character: " ^ (Lexing.lexeme lexbuf) )}
 
 and read_literal_dbl buf =
   parse
@@ -65,8 +65,8 @@ and read_literal_dbl buf =
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_literal_dbl buf lexbuf
     }
-  | _ { raise (SyntaxError ("Illegal literal character: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("Literal is not terminated")) }
+  | _ { raise (SyntaxError ("Illegal literal character: " ^ Lexing.lexeme lexbuf)) }
 
 and read_literal_sgl buf =
   parse
@@ -80,8 +80,8 @@ and read_literal_sgl buf =
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_literal_sgl buf lexbuf
     }
-  | _ { raise (SyntaxError ("Illegal literal character: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("Literal is not terminated")) }
+  | _ { raise (SyntaxError ("Illegal literal character: " ^ Lexing.lexeme lexbuf)) }
 
 and read_declaration buf = parse
   | "%}" { DECLARATION (Buffer.contents buf) }
@@ -92,9 +92,37 @@ and read_declaration buf = parse
 
 {
 
-let () =
-  let lexbuf = Lexing.from_channel stdin in
-  let result = Parser.grammar token lexbuf in
-  Printf.printf "%s\n" @@ Parser.string_of_expr result
+let sprintf = Printf.sprintf
+
+let string_of_tok = function
+  | EQUAL -> "EQUAL"
+  | COLON -> "COLON"
+  | SEMI -> "SEMI"
+  | BAR -> "BAR"
+  | AMP -> "AMP"
+  | NOT -> "NOT"
+  | QUESTION -> "QUESTION"
+  | STAR -> "STAR"
+  | PLUS -> "PLUS"
+  | LPAREN -> "LPAREN"
+  | RPAREN -> "RPAREN"
+  | DOT -> "DOT"
+  | LT -> "LT"
+  | GT -> "GT"
+  | LBRACE -> "LBRACE"
+  | RBRACE -> "RBRACE"
+  | IDENT s ->  sprintf "IDENT<%s>" s
+  | CLASS s ->  sprintf "CLASS<%s>" s
+  | LITERAL s ->  sprintf "LITERAL<%s>" s
+  | DECLARATION s -> sprintf "DECLARATION<%s>" s
+  | TRAILER s -> sprintf "TRAILER<%s>" s
+  | EOF -> "EOF"
+
+let token lexbuf =
+  let t = _token lexbuf
+  in (
+    Printf.eprintf "%s\n" @@ string_of_tok t;
+    t
+  )
 
 }
