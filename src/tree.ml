@@ -14,7 +14,6 @@ and expr =
   | Repeat of expr
   | NonEmptyRepeat of expr
   | Name of string * string option (* varname *)
-  | ResolvedName of expr (*Rule*) * string option (* varname *)
   | Literal of string
   | Class of string
   | Any
@@ -53,7 +52,6 @@ let rec string_of_expr = function
       | Some varname -> sprintf "%s=%s" varname n
       | None -> n
     )
-  | ResolvedName _ -> "<resolved>"
   | Literal s ->
     let escape str =
       if String.contains str '\''

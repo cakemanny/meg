@@ -1,4 +1,6 @@
-
+%{
+(* prologue *)
+%}
 statement
     : declaration
     | expression ';'
@@ -24,3 +26,5 @@ identifier
 int_expr
     : < [1-9][0-9_]* > { yytext () }
     ;
+%%
+(* epliogue *)

@@ -101,12 +101,12 @@ and read_literal_sgl buf =
   | '\\' 'r'  { Buffer.add_char buf '\r'; read_literal_sgl buf lexbuf }
   | '\\' 't'  { Buffer.add_char buf '\t'; read_literal_sgl buf lexbuf }
   | '\n'      { Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_literal_sgl buf lexbuf }
-  | [^ '"' '\\' '\n']+
+  | [^ '\'' '\\' '\n']+
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_literal_sgl buf lexbuf
     }
   | eof { error lexbuf "Literal is not terminated" }
-  | _ as c { error lexbuf "Illegal characer in literal: %c" c }
+  | _ as c { error lexbuf "Illegal character in literal: %c" c }
 
 and read_declaration buf =
   parse
