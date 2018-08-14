@@ -96,8 +96,11 @@ let rec string_of_caml = function
       (string_of_caml def) (string_of_caml subexpr)
   | CList exprs -> "[" ^ (String.concat "; " @@ List.map string_of_caml exprs) ^"]"
 
-
-let rec compile_node (inputstate,cap) node =
+(**
+ * inputstate tracks the variable name of the input we are going to try to
+ * match against.
+ *)
+let rec compile_node (inputstate, capture) node =
   let open Tree in
   let input_n n = CName ("input" ^ (string_of_int n)) in
   let value_n n = CName ("value" ^ (string_of_int n )) in
@@ -106,7 +109,7 @@ let rec compile_node (inputstate,cap) node =
   | Alternate es (* chain matches on the error case *)
     -> List.fold_right (
         (* we backtrack each input, so the inputstate does not advance *)
-        fun node ce -> CMatchExpr { matchee = (compile_node (inputstate,cap) node);
+        fun node ce -> CMatchExpr { matchee = (compile_node (inputstate,capture) node);
                                     patlist = [
                                       CCtor ("Error", [CName "e"]), ce;
                                       (* if not error, then return *)
@@ -115,28 +118,31 @@ let rec compile_node (inputstate,cap) node =
                                   }
       ) es (CCtor ("Error", [CName "e"]))
   | Sequence es ->
-    let (atext, nodes) = (
+    let final_ist = (inputstate + List.length es) in
+    let (first, nodes) = (
       match (List.rev es) with
-      | (Action atext) :: nodes_rev -> (atext, List.rev nodes_rev)
-      | _ -> ("(* missing action *)", es)
+      | first :: nodes_rev ->
+        let compiled_first = (compile_node (final_ist,capture) first)
+        in (compiled_first, List.rev nodes_rev)
+      | [] -> (CCtor ("Success", [value_n inputstate; input_n inputstate]), [])
     ) in
-    let (cexpr,_) = List.fold_right (
-        fun node (ce, is) -> (
-            CMatchExpr { matchee = (compile_node (is-1,cap) node);
+    let (cexpr, _) = List.fold_right (
+        fun node (caml_expr, ist) -> (
+            CMatchExpr { matchee = (compile_node (ist-1,capture) node);
                          patlist = [
                            CCtor ("Success",
-                                  [value_n is; input_n is]), ce;
+                                  [value_n ist; input_n ist]), caml_expr;
                            CName "e", CName "e"
                          ]
                        },
-            (is - 1)
+            (ist - 1)
           )
-      ) nodes (CVerb atext, inputstate + List.length nodes)
+      ) nodes (first, inputstate + List.length nodes)
     in cexpr
   | PeekFor expr -> CVerb "(* PeekFor *)"
   | PeekNot expr -> CVerb "(* PeekNot *)"
   | Optional expr
-    -> CMatchExpr { matchee = (compile_node (inputstate,cap) expr);
+    -> CMatchExpr { matchee = (compile_node (inputstate,capture) expr);
                     patlist = [
                       CCtor ("Success",
                              [value_n (inputstate+1);
@@ -157,7 +163,7 @@ let rec compile_node (inputstate,cap) node =
       name = "aux";
       args = [CName "res"; CName "input0"];
       def = CMatchExpr {
-          matchee = (compile_node (0,cap) expr);
+          matchee = (compile_node (0,capture) expr);
           patlist = [
             CVerb "Success (v, i1)", CVerb "aux (v :: res) i1" ;
             CVerb "Error _", CVerb "Success (res, input0)" ;
@@ -165,7 +171,8 @@ let rec compile_node (inputstate,cap) node =
         };
       subexpr = CApp (CApp (CName "aux", CList []), input_n inputstate)
     }
-  | NonEmptyRepeat expr -> CVerb "(* TODO: NonEmptyRepeat *)"
+  | NonEmptyRepeat expr
+    -> compile_node (inputstate, capture) @@ Sequence [expr; Repeat expr]
   | Capture expr -> (compile_node (inputstate,true) expr)
   | Name (name, None) -> CApp (CName name, input_n inputstate)
   | Name (name, Some varname)
