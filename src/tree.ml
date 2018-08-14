@@ -23,20 +23,6 @@ and expr =
 
 let sprintf = Printf.sprintf
 
-let str_to_list s =
-  let rec aux i xs =
-    if i = 0
-    then xs
-    else aux (i - 1) (s.[i-1] :: xs)
-  in aux (String.length s) []
-
-let list_to_str xs =
-  let buf = Buffer.create 32 in
-  let () = List.fold_left (fun () c -> Buffer.add_char buf c) () xs
-  in Buffer.contents buf
-
-let flat_map f xs = List.flatten @@ List.map f xs
-
 let rec string_of_expr = function
   | Rule (s, e) -> sprintf "%s: %s\n" s @@ string_of_expr e
   | Alternate xs ->
@@ -52,12 +38,7 @@ let rec string_of_expr = function
       | Some varname -> sprintf "%s=%s" varname n
       | None -> n
     )
-  | Literal s ->
-    let escape str =
-      if String.contains str '\''
-      then list_to_str @@ flat_map (function '\'' -> ['\\';'\''] | c -> [c]) @@ str_to_list str
-      else str
-    in sprintf "'%s'" @@ escape s
+  | Literal s -> sprintf "\"%s\"" @@ String.escaped s
   | Class s -> sprintf "%s" s (* These have retained their [ ] *)
   | Any -> "."
   | Action s -> sprintf "{ %s }" s

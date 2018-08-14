@@ -84,7 +84,7 @@ let rec string_of_caml = function
     sprintf "match (%s) with %s"
       (string_of_caml matchee) @@ String.concat "" @@ List.map strpat patlist
   | CName name -> name
-  | CLit lit -> sprintf "\"%s\"" lit
+  | CLit lit -> sprintf "\"%s\"" @@ String.escaped lit
   | CCtor (ctor, cexprs) ->
     sprintf "%s (%s)" ctor @@ string_of_caml (CTuple cexprs)
   | CVerb verbatim -> verbatim
@@ -118,7 +118,7 @@ let rec compile_node (inputstate, capture) node =
                                   }
       ) es (CCtor ("Error", [CName "e"]))
   | Sequence es ->
-    let final_ist = (inputstate + List.length es) in
+    let final_ist = (inputstate + List.length es - 1) in
     let (first, nodes) = (
       match (List.rev es) with
       | first :: nodes_rev ->
@@ -200,7 +200,27 @@ let compile_rules (rules : Tree.expr list) =
   (* TODO: create a rule lookup *)
   (* TODO: check for unmatched names *)
   (* TODO: check for left recursion *)
-  let () = Printf.printf "type 'a result = Success of 'a * string | Error of string\n;;\n\n" in
+  let () = Printf.printf "%s" "
+type string_view = string * int * int
+let string_view_of_string s = (s, 0, String.length s)
+
+type 'a result = Success of 'a * string_view
+               | Error of string
+
+let litmatch literal (str, off, len) =
+  let lit_len = String.length literal in
+  if lit_len > len
+  then Error \"End of input\"
+  else let rec aux pos =
+      if pos = lit_len then true
+      else if literal.[pos] = str.[pos + off]
+      then aux (pos + 1)
+      else false
+  in if (aux 0)
+  then Success (literal, (str, off+lit_len, len-lit_len))
+  else Error literal
+
+" in
   (* let _ = print_actions rules in *)
   let () = Printf.printf "let rec _stub=()\n" in
   List.iter compile_rule rules
