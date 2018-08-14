@@ -68,6 +68,11 @@ type caml_expr =
   | CVerb of string (* verbatim ocaml output  *)
   | CTuple of caml_expr list
   | CApp of caml_expr * caml_expr
+  | CLetRec of { name : string;
+                 args : caml_expr list;
+                 def : caml_expr;
+                 subexpr : caml_expr }
+  | CList of caml_expr list
 ;;
 
 
@@ -85,6 +90,11 @@ let rec string_of_caml = function
   | CVerb verbatim -> verbatim
   | CTuple cexprs -> String.concat "," @@ List.map string_of_caml cexprs
   | CApp (e1, e2) -> sprintf "(%s) (%s)" (string_of_caml e1) (string_of_caml e2)
+  | CLetRec { name; args; def; subexpr } ->
+    sprintf "let rec %s %s = (%s) in (%s)"
+      name (String.concat " " @@  List.map string_of_caml args)
+      (string_of_caml def) (string_of_caml subexpr)
+  | CList exprs -> "[" ^ (String.concat "; " @@ List.map string_of_caml exprs) ^"]"
 
 
 let rec compile_node (inputstate,cap) node =
@@ -142,8 +152,20 @@ let rec compile_node (inputstate,cap) node =
                       ;
                     ]
                   }
-  | Repeat expr -> CVerb "(* Repeat *)"
-  | NonEmptyRepeat expr -> CVerb "(* NonEmptyRepeat *)"
+  | Repeat expr ->
+    CLetRec {
+      name = "aux";
+      args = [CName "res"; CName "input0"];
+      def = CMatchExpr {
+          matchee = (compile_node (0,cap) expr);
+          patlist = [
+            CVerb "Success (v, i1)", CVerb "aux (v :: res) i1" ;
+            CVerb "Error _", CVerb "Success (res, input0)" ;
+          ]
+        };
+      subexpr = CApp (CApp (CName "aux", CList []), input_n inputstate)
+    }
+  | NonEmptyRepeat expr -> CVerb "(* TODO: NonEmptyRepeat *)"
   | Capture expr -> (compile_node (inputstate,true) expr)
   | Name (name, None) -> CApp (CName name, input_n inputstate)
   | Name (name, Some varname)

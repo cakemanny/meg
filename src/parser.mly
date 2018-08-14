@@ -55,7 +55,9 @@ definition:
   n=IDENT COLON e=expression SEMI? { Definition (Rule (n,e)) }
 ;
 expression:
-  a = separated_nonempty_list(BAR, sequence) { Alternate a }
+  a = separated_nonempty_list(BAR, sequence) { match a with
+                                               | [only_alt] -> only_alt
+                                               | a -> Alternate a }
 ;
 sequence:
   s = prefix* { Sequence s }
