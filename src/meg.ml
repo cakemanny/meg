@@ -1,5 +1,7 @@
 (* module T = Tree *)
 
+let sprintf = Printf.sprintf
+
 
 let parse filename (action : Tree.grammar -> unit)  =
   let channel = open_in filename in
@@ -55,12 +57,124 @@ let print_actions rules =
           action_id + 1
         )
   in List.fold_left (walk None) 0 rules
+;;
+
+type caml_expr =
+    CMatchExpr of { matchee : caml_expr;
+                    patlist : (caml_expr * caml_expr) list }
+  | CName of string
+  | CLit of string
+  | CCtor of string * caml_expr list
+  | CVerb of string (* verbatim ocaml output  *)
+  | CTuple of caml_expr list
+  | CApp of caml_expr * caml_expr
+;;
+
+
+let rec string_of_caml = function
+  | CMatchExpr { matchee; patlist } ->
+    let strpat (p,e) =
+      ("| " ^ (string_of_caml p) ^ " -> (" ^ (string_of_caml e) ^ ")")
+    in
+    sprintf "match (%s) with %s"
+      (string_of_caml matchee) @@ String.concat "" @@ List.map strpat patlist
+  | CName name -> name
+  | CLit lit -> sprintf "\"%s\"" lit
+  | CCtor (ctor, cexprs) ->
+    sprintf "%s (%s)" ctor @@ string_of_caml (CTuple cexprs)
+  | CVerb verbatim -> verbatim
+  | CTuple cexprs -> String.concat "," @@ List.map string_of_caml cexprs
+  | CApp (e1, e2) -> sprintf "(%s) (%s)" (string_of_caml e1) (string_of_caml e2)
+
+
+let rec compile_node (inputstate,cap) node =
+  let open Tree in
+  let input_n n = CName ("input" ^ (string_of_int n)) in
+  let value_n n = CName ("value" ^ (string_of_int n )) in
+  match node with
+  | Rule (_,_) -> assert false
+  | Alternate es (* chain matches on the error case *)
+    -> List.fold_right (
+        (* we backtrack each input, so the inputstate does not advance *)
+        fun node ce -> CMatchExpr { matchee = (compile_node (inputstate,cap) node);
+                                    patlist = [
+                                      CCtor ("Error", [CName "e"]), ce;
+                                      (* if not error, then return *)
+                                      CName "success", CName "success"
+                                    ]
+                                  }
+      ) es (CCtor ("Error", [CName "e"]))
+  | Sequence es ->
+    let (atext, nodes) = (
+      match (List.rev es) with
+      | (Action atext) :: nodes_rev -> (atext, List.rev nodes_rev)
+      | _ -> ("(* missing action *)", es)
+    ) in
+    let (cexpr,_) = List.fold_right (
+        fun node (ce, is) -> (
+            CMatchExpr { matchee = (compile_node (is-1,cap) node);
+                         patlist = [
+                           CCtor ("Success",
+                                  [value_n is; input_n is]), ce;
+                           CName "e", CName "e"
+                         ]
+                       },
+            (is - 1)
+          )
+      ) nodes (CVerb atext, inputstate + List.length nodes)
+    in cexpr
+  | PeekFor expr -> CVerb "(* PeekFor *)"
+  | PeekNot expr -> CVerb "(* PeekNot *)"
+  | Optional expr
+    -> CMatchExpr { matchee = (compile_node (inputstate,cap) expr);
+                    patlist = [
+                      CCtor ("Success",
+                             [value_n (inputstate+1);
+                              input_n (inputstate+1)]),
+                      CCtor ("Success",
+                             [ CCtor ("Some", [value_n (inputstate+1)]);
+                              input_n (inputstate+1)])
+                      ;
+                      CCtor ("Error", [CName "_"]),
+                      CCtor ("Success",
+                             [ CCtor ("None", []);
+                              input_n (inputstate)])
+                      ;
+                    ]
+                  }
+  | Repeat expr -> CVerb "(* Repeat *)"
+  | NonEmptyRepeat expr -> CVerb "(* NonEmptyRepeat *)"
+  | Capture expr -> (compile_node (inputstate,true) expr)
+  | Name (name, None) -> CApp (CName name, input_n inputstate)
+  | Name (name, Some varname)
+    -> (*FIXME: Do something with the varname *)
+    CApp (CName name, input_n inputstate)
+  | Literal lit -> CApp (CApp (CName "litmatch", CLit lit), input_n inputstate)
+  | Class classlit -> CVerb "(* Class *)"
+  | Any -> CApp (CName "read_any", input_n inputstate)
+  | Action text ->
+    (* Maybe want to do some "let varname=value1 in..." magic *)
+    CVerb ("(" ^ text ^ ")")
+  | Predicate text ->
+    CVerb ("if (" ^ text ^ ") then Success ((), input" ^ (string_of_int inputstate) ^ ") Error \"custom predicate failed\"")
+
+
+let rec compile_rule = function
+  | Tree.Rule (name, expr) -> (
+      let compiled_node = compile_node (0,false) expr in
+      let as_string = string_of_caml compiled_node in
+      Printf.printf "and %s input0 = (\n%s\n)\n" name as_string
+    )
+  | _ -> assert false
 
 let compile_rules (rules : Tree.expr list) =
-  (* TODO: check for left recursion *)
   (* TODO: create a rule lookup *)
-  let _ = print_actions rules in
-  ()
+  (* TODO: check for unmatched names *)
+  (* TODO: check for left recursion *)
+  let () = Printf.printf "type 'a result = Success of 'a * string | Error of string\n;;\n\n" in
+  (* let _ = print_actions rules in *)
+  let () = Printf.printf "let rec _stub=()\n" in
+  List.iter compile_rule rules
 
 let compile_result result =
   let open Tree in
