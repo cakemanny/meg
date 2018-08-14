@@ -185,7 +185,7 @@ let rec compile_node (inputstate, capture) node =
     (* Maybe want to do some "let varname=value1 in..." magic *)
     CVerb ("(" ^ text ^ ")")
   | Predicate text ->
-    CVerb ("if (" ^ text ^ ") then Success ((), input" ^ (string_of_int inputstate) ^ ") Error \"custom predicate failed\"")
+    CVerb ("if (" ^ text ^ ") then Success ((), input" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
 
 
 let rec compile_rule = function
@@ -219,6 +219,8 @@ let litmatch literal (str, off, len) =
   in if (aux 0)
   then Success (literal, (str, off+lit_len, len-lit_len))
   else Error literal
+
+(*TODO: implement read_any *)
 
 " in
   (* let _ = print_actions rules in *)
