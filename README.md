@@ -8,10 +8,15 @@ It's based heavily on \_why's [greg](https://github.com/whymirror/greg)
 ## Requirements
 
   * ocaml
-  * Menhir
   * ocamlbuild
   * Make
 
+## Required Packages
+
+These can be installed using `opam` or any other way seen fit
+
+  * Menhir
+  * Stringext
 
 
 ## Build instructions
