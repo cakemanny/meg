@@ -2,3 +2,31 @@
 
 parse: [A-Za-z0-9_]
 
+%%
+
+let failed = ref false
+
+let () =
+  let is_match = function Success (_,(_,_,len)) -> len=0 | Error _ -> false in
+  let test (rule, input, expected) =
+    let result = rule (string_view_of_string input) in
+    if is_match result <> expected
+    then (
+      failed := true;
+      Printf.eprintf "Expected \"%s\" to%s match, but it didn't!"
+        input (if expected then "" else " not" )
+      )
+    else ()
+  in
+  List.iter test [
+    parse, "a", true;
+    parse, "b", true;
+    parse, "z", true;
+    parse, "A", true;
+    parse, "B", true;
+    parse, "Z", true;
+    parse, "4", true;
+    parse, "_", true;
+  ];
+  if !failed then exit 1 else exit 0
+

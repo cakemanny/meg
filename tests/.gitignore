@@ -1,3 +1,5 @@
 *.ml
 *.cmi
 *.cmo
+*.byte
+*.native
