@@ -1,6 +1,6 @@
 
 OCB = ocamlbuild
-OCBFLAGS = -use-menhir -I src
+OCBFLAGS = -use-ocamlfind -use-menhir -I src
 
 .PHONY: all clean sanity native byte debug
 

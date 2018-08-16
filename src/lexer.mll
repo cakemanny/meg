@@ -20,6 +20,26 @@ let error lexbuf fmt =
   Printf.kprintf (fun msg ->
       raise (SyntaxError ((position lexbuf)^" "^msg))) fmt
 
+type class_token =
+  | RangeTok of char * char
+  | CharTok of char
+  | EofTok
+
+let unescape_char s =
+  if String.length s > 1 && s.[0] = '\\' then
+    match s.[1] with
+    | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+      -> s
+         |> Stringext.to_list
+         |> List.tl
+         |> List.fold_left (fun oct c -> (oct * 8) + Char.(code c - code '0')) 0
+         |> Char.chr
+    | 'b' -> '\b'
+    | 'n' -> '\n'
+    | 'r' -> '\r'
+    | 't' -> '\t'
+    | c -> c
+  else s.[0]
 }
 
 let ident_start = ['a'-'z' 'A'-'Z' '_']
@@ -28,8 +48,8 @@ let identifier  = ident_start ident_cont*
 
 (* We've adapated char a bit to work only with range.
  * Notice it won't match [ or ] *)
-let char        = '\\' ['n' 'r' 't' '\'' '"' '[' ']' '\\']
-                | '\\' ['0'-'2']['0'-'7']['0'-'7']
+let char        = '\\' ['b' 'n' 'r' 't' '\'' '"' '[' ']' '\\']
+                | '\\' ['0'-'3']['0'-'7']['0'-'7']
                 | '\\' ['0'-'7']['0'-'7']?
                 | [^ '\\' '[' ']']
 let range       = char '-' char | char
@@ -55,7 +75,7 @@ rule _token = parse
   | clazz as lxm { for i = 0 to (String.length lxm) - 1 do
                      if lxm.[i] = '\n' then Lexing.new_line lexbuf
                    done;
-                   CLASS lxm}
+                   CLASS (String.sub lxm 1 @@ String.length lxm - 2 )}
   | '='  {EQUAL}
   | ':'  {COLON}
   | ';'  {SEMI}
@@ -124,6 +144,13 @@ and read_braces level buf =
 | '\n'{ Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_braces level buf lexbuf }
 | _ as c { Buffer.add_char buf c; read_braces level buf lexbuf }
 | eof { error lexbuf "Action not terminated" }
+
+(* *)
+and class_token =
+  parse
+| (char as c1) '-' (char as c2) { RangeTok (unescape_char c1, unescape_char c2) }
+| char as c { CharTok (unescape_char c) }
+| eof { EofTok }
 
 {
 

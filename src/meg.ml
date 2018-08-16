@@ -96,15 +96,18 @@ let rec string_of_caml = function
       (string_of_caml def) (string_of_caml subexpr)
   | CList exprs -> "[" ^ (String.concat "; " @@ List.map string_of_caml exprs) ^"]"
 
+
+let nasty_global_classfn_lookup = ref []
+
 (**
  * inputstate tracks the variable name of the input we are going to try to
  * match against.
  *)
-let rec compile_node (inputstate, capture) node =
+let rec compile_node (inputstate, capture) =
   let open Tree in
   let input_n n = CName ("input" ^ (string_of_int n)) in
   let value_n n = CName ("value" ^ (string_of_int n )) in
-  match node with
+  function
   | Rule (_,_) -> assert false
   | Alternate es (* chain matches on the error case *)
     -> List.fold_right (
@@ -179,7 +182,9 @@ let rec compile_node (inputstate, capture) node =
     -> (*FIXME: Do something with the varname *)
     CApp (CName name, input_n inputstate)
   | Literal lit -> CApp (CApp (CName "litmatch", CLit lit), input_n inputstate)
-  | Class classlit -> CVerb "(* Class *)"
+  | Class classlit ->
+    let matchfn_name = List.assoc classlit !nasty_global_classfn_lookup in
+    CApp (CApp (CName "classmatch", CName matchfn_name), input_n inputstate)
   | Any -> CApp (CName "read_any", input_n inputstate)
   | Action text ->
     (* Maybe want to do some "let varname=value1 in..." magic *)
@@ -188,7 +193,49 @@ let rec compile_node (inputstate, capture) node =
     CVerb ("if (" ^ text ^ ") then Success ((), input" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
 
 
-let rec compile_rule = function
+let compile_class classlit =
+  let lexbuf = Lexing.from_string classlit in
+  let next_token () = Lexer.class_token lexbuf in
+  let rec aux results =
+    let return = (fun s -> aux (s :: results) @@ next_token ()) in
+    function
+    | Lexer.RangeTok (cstart, cend) -> (
+        if cstart > cend then raise @@ Invalid_argument classlit;
+        return @@ Printf.sprintf "('%c' <= c && c <= '%c')" cstart cend
+      )
+    | Lexer.CharTok (c) -> (
+        return @@ Printf.sprintf "(c = '%c')" c
+      )
+    | Lexer.EofTok -> results
+  in
+  let expr_strings = aux [] @@ next_token () in
+  String.concat " || " expr_strings
+
+
+let rec compile_classes result_list =
+  let open Tree in
+  function
+  | Rule (name, expr) -> compile_classes result_list expr
+  | Alternate exprs
+  | Sequence exprs
+    -> List.fold_left compile_classes result_list exprs
+  | PeekFor expr
+  | PeekNot expr
+  | Optional expr
+  | Repeat expr
+  | NonEmptyRepeat expr
+  | Capture expr
+    -> compile_classes result_list expr
+  | Name (_, _)
+  | Literal _
+  | Any
+  | Action _
+  | Predicate _
+    -> result_list
+  | Class classlit -> (classlit, compile_class classlit) :: result_list
+
+
+let compile_rule = function
   | Tree.Rule (name, expr) -> (
       let compiled_node = compile_node (0,false) expr in
       let as_string = string_of_caml compiled_node in
@@ -220,10 +267,24 @@ let litmatch literal (str, off, len) =
   then Success (literal, (str, off+lit_len, len-lit_len))
   else Error literal
 
+let classmatch matchfn (str, off, len) =
+  if len = 0
+  then Error \"End of input \"
+  else if matchfn (str.[off])
+  then Success (str.[off], (str, off+1, len-1))
+  else Error \"nomatch\"
+
 (*TODO: implement read_any *)
 
 " in
   (* let _ = print_actions rules in *)
+  let classes = List.fold_left compile_classes [] rules in
+  let classlit2funcname = List.fold_left (fun (map,idx) (classlit, classbody) ->
+      Printf.printf "let yy_classmatch%d c = %s\n\n" idx classbody;
+      (classlit, Printf.sprintf "yy_classmatch%d" idx) :: map, idx + 1
+    ) ([], 0) classes
+  in
+  let () = nasty_global_classfn_lookup := fst classlit2funcname in
   let () = Printf.printf "let rec _stub=()\n" in
   List.iter compile_rule rules
 

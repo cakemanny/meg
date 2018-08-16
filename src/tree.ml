@@ -39,7 +39,7 @@ let rec string_of_expr = function
       | None -> n
     )
   | Literal s -> sprintf "\"%s\"" @@ String.escaped s
-  | Class s -> sprintf "%s" s (* These have retained their [ ] *)
+  | Class s -> sprintf "[%s]" s (* These have retained their [ ] *)
   | Any -> "."
   | Action s -> sprintf "{ %s }" s
   | Predicate s -> sprintf "&{ %s }" s
