@@ -2,22 +2,27 @@
 OCB = ocamlbuild
 OCBFLAGS = -use-ocamlfind -use-menhir -I src
 
-.PHONY: all clean sanity native byte debug
+.PHONY: all clean sanity native byte debug clean_tests test
 
 all: byte
 
-native: sanity
+native: sanity clean_tests
 	$(OCB) $(OCBFLAGS) meg.native
 
-byte: sanity
+byte: sanity clean_tests
 	$(OCB) $(OCBFLAGS) meg.byte
 
-debug: sanity
+debug: sanity clean_tests
 	$(OCB) $(OCBFLAGS) -tag debug meg.byte
 
 sanity:
 	which menhir
 
-clean:
+clean: clean_tests
 	$(OCB) $(OCBFLAGS) -clean
 
+clean_tests:
+	$(MAKE) -C tests clean
+
+test:
+	$(MAKE) -C tests test

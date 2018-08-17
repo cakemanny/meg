@@ -12,8 +12,8 @@ let parse filename (action : Tree.grammar -> unit)  =
       let result = Parser.grammar Lexer.token lexbuf in
       action result
     with
-    | Parser.Error -> Printf.eprintf "It's all gone wrong\n"
-    | Lexer.SyntaxError msg -> Printf.eprintf "%s\n" msg
+    | Parser.Error -> Printf.eprintf "It's all gone wrong\n"; exit 1
+    | Lexer.SyntaxError msg -> Printf.eprintf "%s\n" msg; exit 1
   with e ->
     close_in_noerr channel;
     raise e
@@ -75,26 +75,36 @@ type caml_expr =
   | CList of caml_expr list
 ;;
 
+let spaces n =
+  let b = Bytes.create n in
+  BytesLabels.fill b ~pos:0 ~len:n ' ';
+  Bytes.to_string b
 
-let rec string_of_caml = function
+let rec string_of_caml ilvl =
+  let nl = "\n" ^ spaces ilvl in
+  let nl1 = nl ^ "  " in
+  function
   | CMatchExpr { matchee; patlist } ->
     let strpat (p,e) =
-      ("| " ^ (string_of_caml p) ^ " -> (" ^ (string_of_caml e) ^ ")")
+      (nl ^ "| " ^ (string_of_caml ilvl p) ^ " -> (" ^ nl1 ^ (string_of_caml (ilvl+2) e) ^ nl ^ ")")
     in
-    sprintf "match (%s) with %s"
-      (string_of_caml matchee) @@ String.concat "" @@ List.map strpat patlist
+    sprintf "match (%s%s%s) with%s" nl1
+      (string_of_caml (ilvl+2) matchee) nl @@ String.concat "" @@ List.map strpat patlist
   | CName name -> name
   | CLit lit -> sprintf "\"%s\"" @@ String.escaped lit
-  | CCtor (ctor, cexprs) ->
-    sprintf "%s (%s)" ctor @@ string_of_caml (CTuple cexprs)
+  | CCtor (ctor, cexprs) -> (
+      match cexprs with
+      | [] -> sprintf "%s" ctor
+      | _ -> sprintf "%s (%s)" ctor @@ string_of_caml ilvl (CTuple cexprs)
+    )
   | CVerb verbatim -> verbatim
-  | CTuple cexprs -> String.concat "," @@ List.map string_of_caml cexprs
-  | CApp (e1, e2) -> sprintf "(%s) (%s)" (string_of_caml e1) (string_of_caml e2)
+  | CTuple cexprs -> String.concat ", " @@ List.map (string_of_caml ilvl) cexprs
+  | CApp (e1, e2) -> sprintf "(%s) (%s)" (string_of_caml ilvl e1) (string_of_caml ilvl e2)
   | CLetRec { name; args; def; subexpr } ->
-    sprintf "let rec %s %s = (%s) in (%s)"
-      name (String.concat " " @@  List.map string_of_caml args)
-      (string_of_caml def) (string_of_caml subexpr)
-  | CList exprs -> "[" ^ (String.concat "; " @@ List.map string_of_caml exprs) ^"]"
+    sprintf "let rec %s %s = (%s%s%s) in (%s%s%s)"
+      name (String.concat " " @@  List.map (string_of_caml ilvl) args)
+      nl1 (string_of_caml (ilvl+2) def) nl nl1 (string_of_caml (ilvl+2) subexpr) nl
+  | CList exprs -> "[" ^ (String.concat "; " @@ List.map (string_of_caml ilvl) exprs) ^"]"
 
 
 let nasty_global_classfn_lookup = ref []
@@ -133,9 +143,10 @@ let rec compile_node (inputstate, capture) =
         fun node (caml_expr, ist) -> (
             CMatchExpr { matchee = (compile_node (ist-1,capture) node);
                          patlist = [
-                           CCtor ("Success",
-                                  [value_n ist; input_n ist]), caml_expr;
-                           CName "e", CName "e"
+                           (CCtor ("Success",
+                                   [value_n ist; input_n ist]), caml_expr);
+                           (CCtor ("Error", [CName "e"]),
+                            CCtor ("Error", [CName "e"]))
                          ]
                        },
             (ist - 1)
@@ -188,7 +199,7 @@ let rec compile_node (inputstate, capture) =
   | Any -> CApp (CName "read_any", input_n inputstate)
   | Action text ->
     (* Maybe want to do some "let varname=value1 in..." magic *)
-    CVerb ("(" ^ text ^ ")")
+    CCtor ("Success", [CVerb ("(" ^ text ^ ")"); input_n inputstate])
   | Predicate text ->
     CVerb ("if (" ^ text ^ ") then Success ((), input" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
 
@@ -238,7 +249,7 @@ let rec compile_classes result_list =
 let compile_rule = function
   | Tree.Rule (name, expr) -> (
       let compiled_node = compile_node (0,false) expr in
-      let as_string = string_of_caml compiled_node in
+      let as_string = string_of_caml 2 compiled_node in
       Printf.printf "and %s input0 = (\n%s\n)\n" name as_string
     )
   | _ -> assert false
@@ -316,7 +327,7 @@ let compile_result result =
 let () =
   match (Array.to_list Sys.argv) with
   | [] -> Printf.eprintf("unreachable")
-  | progname :: [] -> Printf.eprintf "usage: %s <filename>\n" progname
+  | progname :: [] -> (Printf.eprintf "usage: %s <filename>\n" progname; exit 1)
   | progname :: filename :: _ -> begin
       parse filename compile_result
     end

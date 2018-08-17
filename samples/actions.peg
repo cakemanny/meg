@@ -8,7 +8,7 @@ program
 
 statement
     : declaration
-    | expression ';'?
+    | expression ';'? { (* TODO, implement $1 *) "hi!" }
     ;
 declaration
     : "var" identifier '=' expression ';'
@@ -23,7 +23,7 @@ product
     ;
 primary
     : id=identifier { id }
-    | value=int_expr { val }
+    | value=int_expr { value }
     ;
 identifier
     : < [a-zA-Z_][a-zA-Z0-9_]* > { yytext () }

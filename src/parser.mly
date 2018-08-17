@@ -43,7 +43,7 @@ grammar:
     | Some trail -> ds @ [trail]
     | None -> ds
   }
-| error { Printf.eprintf("There was an error in your syntax\n"); [] }
+| error { Printf.eprintf("There was an error in your syntax\n"); exit 1; [] }
 ;
 declaration:
   d=DECLARATION { Declaration d }
@@ -75,7 +75,7 @@ suffix:
 | p=primary PLUS { NonEmptyRepeat p }
 ;
 primary:
-| varname=IDENT EQUAL name=IDENT (* !: *) { Name (name, Some varname) }
+  varname=IDENT EQUAL name=IDENT (* !: *) { Name (name, Some varname) }
 | name=IDENT (* !: *) { Name (name, None) }
 | LPAREN e=expression RPAREN { e }
 | l=LITERAL { Literal l }

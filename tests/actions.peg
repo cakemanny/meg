@@ -1,0 +1,15 @@
+
+parse: { "hi" }
+
+%%
+
+let () =
+  let input1 = string_view_of_string "an input" in
+  match (parse input1) with
+  | Success (value, (str, off, len)) ->
+    begin
+      assert (value = "hi");
+      assert (off = 0); (* An action should consume no input *)
+    end
+  | Error msg -> (Printf.eprintf "Error %s" msg; exit 1)
+
