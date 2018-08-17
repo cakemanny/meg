@@ -6,6 +6,11 @@ a: "a"
 b: "b"
 ;
 
+seq2: v1=letter { Printf.sprintf "(%c)" v1 } v2=letter     { v2 }
+;
+letter: [A-Za-z]
+;
+
 %%
 
 let () =

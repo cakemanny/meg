@@ -87,11 +87,14 @@ let rec string_of_caml ilvl =
 let nasty_global_classfn_lookup = ref []
 
 (**
- * Given a sequence with variables and an:
- *  v1=expr1 v2=expr2 v3=expr3
+ * Given a sequence with variables and an action:
+ *     v1=expr1 v2=expr2 v3=expr3 { v1 + v2 + v3 }
+ * replace matching identifiers in the action with the matched values from
+ * the sequence
  *)
-let substitute_vars varmap inputstate text =
-  let lexer = Genlex.make_lexer [] in
+let sub_vars_text varmap inputstate text =
+  (* In the default Genlex lexer . is illegal *)
+  let lexer = Genlex.make_lexer ["."] in
   let toks = lexer (Stream.of_string text) in
   let reversed_results = ref [] in
   let prepend s = reversed_results := s :: !reversed_results in
@@ -148,7 +151,7 @@ let rec compile_node (inputstate, capture) =
         ([], 1) es
     in
     let sub_vars_node = function
-      | Action text -> Action (substitute_vars varmap inputstate text)
+      | Action text -> Action (sub_vars_text varmap inputstate text)
       | other -> other
     in
     let final_ist = (inputstate + List.length es - 1) in
@@ -165,7 +168,7 @@ let rec compile_node (inputstate, capture) =
       List.fold_right
         (fun node (caml_expr, ist) ->
            (CMatchExpr {
-               matchee = (compile_node (ist-1,capture) node);
+               matchee = (compile_node (ist-1,capture) (sub_vars_node node));
                patlist = [
                  (CCtor ("Success", [value_n ist; input_n ist]), caml_expr);
                  (CCtor ("Error", [CName "e"]),
