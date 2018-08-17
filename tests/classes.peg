@@ -1,6 +1,12 @@
 
 
-parse: [A-Za-z0-9_]
+ranges: [A-Za-z0-9_]
+;
+newline: [\n]
+;
+octal: [\040]
+;
+negative: [^a]
 
 %%
 
@@ -19,14 +25,19 @@ let () =
     else ()
   in
   List.iter test [
-    parse, "a", true;
-    parse, "b", true;
-    parse, "z", true;
-    parse, "A", true;
-    parse, "B", true;
-    parse, "Z", true;
-    parse, "4", true;
-    parse, "_", true;
+    ranges, "a", true;
+    ranges, "b", true;
+    ranges, "z", true;
+    ranges, "A", true;
+    ranges, "B", true;
+    ranges, "Z", true;
+    ranges, "4", true;
+    ranges, "_", true;
+    ranges, "-", false;
+    newline, "\n", true;
+    octal, " ", true;
+    negative, "a", false;
+    negative, "b", true;
   ];
   if !failed then exit 1 else exit 0
 
