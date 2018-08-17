@@ -7,6 +7,11 @@ newline: [\n]
 octal: [\040]
 ;
 negative: [^a]
+;
+
+char_classes: [abc];
+should_be: [abc];
+deduped: [abc];
 
 %%
 

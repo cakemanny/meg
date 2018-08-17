@@ -84,6 +84,9 @@ let rec string_of_caml ilvl =
   | CList exprs -> "[" ^ (String.concat "; " @@ List.map (string_of_caml ilvl) exprs) ^"]"
 
 
+module SetString = Set.Make(String)
+module MapString = Map.Make(String)
+
 let nasty_global_classfn_lookup = ref []
 
 (**
@@ -331,14 +334,23 @@ let classmatch matchfn (str, off, len) =
 
 " in
   let classes = List.fold_left compile_classes [] rules in
-  let classlit2funcname =
+  let (_, unique_classes) =
     List.fold_left
-      (fun (map,idx) (classlit, classbody) ->
-         Printf.printf "let yy_classmatch%d c = %s\n\n" idx classbody;
-         (classlit, Printf.sprintf "yy_classmatch%d" idx) :: map, idx + 1)
-      ([], 0) classes
+      (fun (set, mem) (lit, body) ->
+         if SetString.mem lit set then
+           (set, mem)
+         else
+           (SetString.add lit set, (lit, body) :: mem))
+      (SetString.empty, []) classes
   in
-  let () = nasty_global_classfn_lookup := fst classlit2funcname in
+  let (classlit2funcname, _) =
+    List.fold_left
+      (fun (map, idx) (classlit, classbody) ->
+         Printf.printf "let yyClassmatch%d c = %s\n\n" idx classbody;
+         (classlit, Printf.sprintf "yyClassmatch%d" idx) :: map, idx + 1)
+      ([], 0) unique_classes
+  in
+  let () = nasty_global_classfn_lookup := classlit2funcname in
   let () = Printf.printf "let rec _stub=()\n" in
   List.iter compile_rule rules
 
