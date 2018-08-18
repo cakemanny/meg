@@ -9,8 +9,8 @@ let () =
   let input = string_view_of_string "any" in
   let () =
     match (parse input) with
-    | Ok ('y', (_, _, 0)) -> ()
-    | Ok (value, (_,_,len)) ->
+    | Ok ('y', (_, _, 0), _) -> ()
+    | Ok (value, (_,_,len), _) ->
       (Printf.eprintf
         "expected 'y' and no remaining characters in remaining \
         input but value was %c and there were %d characters of \
@@ -24,6 +24,6 @@ let () =
     | Error "End of input" -> ()
     | Error msg ->
         Printf.eprintf "Expected \"End of input\", was: \"%s\"\n" msg
-    | Ok (value, (_,_,len))  ->
+    | Ok (value, (_,_,len), _)  ->
       (Printf.eprintf "Expected \"End of input\", was Ok('%c',_)\n" value; exit 1)
   in exit 0

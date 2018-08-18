@@ -42,13 +42,19 @@ type caml_expr =
   | CVerb of string (* verbatim ocaml output  *)
   | CTuple of caml_expr list
   | CApp of caml_expr * caml_expr
+  | CLet of {
+      pat : caml_expr;
+      def : caml_expr;
+      subexpr : caml_expr
+    }
   | CLetRec of {
       name : string;
       args : caml_expr list;
       def : caml_expr;
       subexpr : caml_expr
     }
-  | CList of caml_expr list
+  | CList of caml_expr list (* A list literal *)
+  | CSeq of caml_expr list (* A sequence of statements ; separated *)
 
 
 let spaces n =
@@ -71,16 +77,21 @@ let rec string_of_caml ilvl =
   | CCtor (ctor, cexprs) -> (
       match cexprs with
       | [] -> sprintf "%s" ctor
-      | _ -> sprintf "%s (%s)" ctor @@ string_of_caml ilvl (CTuple cexprs)
+      | _ -> sprintf "%s %s" ctor @@ string_of_caml ilvl (CTuple cexprs)
     )
   | CVerb verbatim -> verbatim
-  | CTuple cexprs -> String.concat ", " @@ List.map (string_of_caml ilvl) cexprs
+  | CTuple cexprs -> "(" ^ (String.concat ", " @@ List.map (string_of_caml ilvl) cexprs) ^ ")"
   | CApp (e1, e2) -> sprintf "(%s) (%s)" (string_of_caml ilvl e1) (string_of_caml ilvl e2)
+  | CLet { pat; def; subexpr } ->
+    sprintf "let %s = (%s%s%s) in (%s%s%s)"
+      (string_of_caml ilvl pat)
+      nl1 (string_of_caml (ilvl+2) def) nl nl1 (string_of_caml (ilvl+2) subexpr) nl
   | CLetRec { name; args; def; subexpr } ->
     sprintf "let rec %s %s = (%s%s%s) in (%s%s%s)"
       name (String.concat " " @@  List.map (string_of_caml ilvl) args)
       nl1 (string_of_caml (ilvl+2) def) nl nl1 (string_of_caml (ilvl+2) subexpr) nl
   | CList exprs -> "[" ^ (String.concat "; " @@ List.map (string_of_caml ilvl) exprs) ^"]"
+  | CSeq exprs -> "(" ^ nl1 ^ (String.concat "; " @@ List.map (string_of_caml (ilvl+2)) exprs) ^ nl ^ ")"
 
 
 module SetString = Set.Make(String)
@@ -123,11 +134,12 @@ let sub_vars_text varmap inputstate text =
  * inputstate tracks the variable name of the input we are going to try to
  * match against.
  *)
-let rec compile_node (inputstate, capture) =
+let rec compile_node inputstate =
   let open Tree in
   let statevar name n = CName (sprintf "%s%d" name n) in
   let input_n = statevar "yyInput" in
   let value_n = statevar "yyValue" in
+  let cn_yytext = CName "yytext" in
   function
   | Rule (_,_) -> assert false
   | Alternate es (* chain matches on the error case *)
@@ -135,11 +147,12 @@ let rec compile_node (inputstate, capture) =
         (* we backtrack each input, so the inputstate does not advance *)
          (fun node caml_expr ->
             CMatchExpr {
-              matchee = (compile_node (inputstate,capture) node);
+              matchee = (compile_node inputstate node);
               patlist = [
                 CCtor ("Error", [CName "e"]), caml_expr;
                 (* if not error, then return *)
-                CName "success", CName "success" ]
+                CName "success", CName "success"
+              ]
             })
          es (CCtor ("Error", [CName "e"]))
   | Sequence es ->
@@ -162,18 +175,20 @@ let rec compile_node (inputstate, capture) =
       match (List.rev es) with
       | first :: nodes_rev ->
         let compiled_first =
-          compile_node (final_ist, capture) (sub_vars_node first)
+          compile_node final_ist (sub_vars_node first)
         in
         (compiled_first, List.rev nodes_rev)
-      | [] -> (CCtor ("Ok", [value_n inputstate; input_n inputstate]), [])
+      | [] ->
+        (CCtor ("Ok", [value_n inputstate; input_n inputstate; cn_yytext]),
+         [])
     ) in
     let (cexpr, _) =
       List.fold_right
         (fun node (caml_expr, ist) ->
            (CMatchExpr {
-               matchee = (compile_node (ist-1,capture) (sub_vars_node node));
+               matchee = (compile_node (ist-1) (sub_vars_node node));
                patlist = [
-                 (CCtor ("Ok", [value_n ist; input_n ist]), caml_expr);
+                 (CCtor ("Ok", [value_n ist; input_n ist; cn_yytext]), caml_expr);
                  (CCtor ("Error", [CName "e"]),
                   CCtor ("Error", [CName "e"]))
                ]
@@ -185,15 +200,18 @@ let rec compile_node (inputstate, capture) =
   | PeekNot expr -> CVerb "(* PeekNot *)"
   | Optional expr
     -> CMatchExpr {
-        matchee = (compile_node (inputstate,capture) expr);
+        matchee = (compile_node inputstate expr);
         patlist = [
           CCtor ("Ok", [value_n (inputstate+1);
-                        input_n (inputstate+1)]),
+                        input_n (inputstate+1);
+                        cn_yytext]),
           CCtor ("Ok", [CCtor ("Some", [value_n (inputstate+1)]);
-                        input_n (inputstate+1)])
+                        input_n (inputstate+1);
+                        cn_yytext
+                       ])
           ;
           CCtor ("Error", [CName "_"]),
-          CCtor ("Ok", [CCtor ("None", []); input_n (inputstate)])
+          CCtor ("Ok", [CCtor ("None", []); input_n (inputstate); cn_yytext])
           ;
         ]
       }
@@ -202,18 +220,41 @@ let rec compile_node (inputstate, capture) =
       name = "aux";
       args = [CName "res"; CName "yyInput0"];
       def = CMatchExpr {
-          matchee = (compile_node (0,capture) expr);
+          matchee = (compile_node 0 expr);
           patlist = [
-            CVerb "Ok (v, i1)", CVerb "aux (v :: res) i1" ;
-            CVerb "Error _", CVerb "Ok (res, yyInput0)" ;
+            CVerb "Ok (v, i1, _)", CVerb "aux (v :: res) i1" ;
+            CVerb "Error _", CVerb "Ok (res, yyInput0, yytext)" ;
           ]
         };
       subexpr = CApp (CApp (CName "aux", CList []), input_n inputstate)
     }
   | NonEmptyRepeat expr
-    -> compile_node (inputstate, capture) @@ Sequence [expr; Repeat expr]
+    -> compile_node inputstate @@ Sequence [expr; Repeat expr]
   | Capture expr ->
-    (compile_node (inputstate, true) expr)
+    CMatchExpr {
+      matchee = (compile_node inputstate expr);
+      patlist = [
+        (CCtor ("Ok", [CName "v"; CName "remaining_input"; CName "_" ]),
+         CLet {
+           pat = CTuple [ CName "str"; CName "off_start"; CName "_" ];
+           def = input_n inputstate;
+           subexpr =
+             CLet {
+               pat = CTuple [ CName "_"; CName "off_end"; CName "_" ];
+               def = CName "remaining_input";
+               subexpr =
+                 CCtor (
+                   "Ok", [
+                     CName "v"; CName "remaining_input";
+                     CVerb "String.sub str off_start (off_end - off_start)"
+                   ]
+                 )
+             }
+         });
+        (CCtor ("Error", [CName "e"]),
+         CCtor ("Error", [CName "e"]) )
+      ]
+    }
   | Name (name, None) -> CApp (CName name, input_n inputstate)
   | Name (name, Some varname)
     -> (*FIXME: Do something with the varname *)
@@ -228,9 +269,9 @@ let rec compile_node (inputstate, capture) =
   | Any -> CApp (CName "read_any", input_n inputstate)
   | Action text ->
     (* variables should have been subbed by now *)
-    CCtor ("Ok", [CVerb ("(" ^ text ^ ")"); input_n inputstate])
+    CCtor ("Ok", [CVerb ("(" ^ text ^ ")"); input_n inputstate; cn_yytext])
   | Predicate text ->
-    CVerb ("if (" ^ text ^ ") then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
+    CVerb ("if (" ^ text ^ ") then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ", yytext) else Error \"custom predicate failed\"")
 
 
 let compile_class_pos classlit =
@@ -289,7 +330,7 @@ let rec compile_classes result_list =
 
 let compile_rule = function
   | Tree.Rule (name, expr) ->
-      let compiled_node = compile_node (0,false) expr in
+      let compiled_node = compile_node 0 expr in
       let as_string = string_of_caml 2 compiled_node in
       Printf.printf "and %s yyInput0 = (\n  %s\n)\n" name as_string
   | _ -> assert false
@@ -303,6 +344,9 @@ let compile_rules (rules : Tree.expr list) =
 type string_view = string * int * int
 
 let string_view_of_string s = (s, 0, String.length s)
+
+(* default value for yytext *)
+let yytext = \"\"
 
 let litmatch literal (str, off, len) =
   let lit_len = String.length literal in
@@ -318,7 +362,7 @@ let litmatch literal (str, off, len) =
         false
     in
     if (aux 0) then
-      Ok (literal, (str, off+lit_len, len-lit_len))
+      Ok (literal, (str, off+lit_len, len-lit_len), \"\")
     else
       Error literal
 
@@ -326,7 +370,7 @@ let classmatch matchfn (str, off, len) =
   if len = 0 then
     Error \"End of input\"
   else if matchfn (str.[off]) then
-    Ok (str.[off], (str, off+1, len-1))
+    Ok (str.[off], (str, off+1, len-1), \"\")
   else
     Error \"nomatch\"
 
@@ -351,7 +395,7 @@ let read_any = classmatch (fun _ -> true)
       ([], 0) unique_classes
   in
   let () = nasty_global_classfn_lookup := classlit2funcname in
-  let () = Printf.printf "let rec _stub=()\n" in
+  let () = Printf.printf "let rec _stub = ()\n" in
   List.iter compile_rule rules
 
 
@@ -405,6 +449,7 @@ let compile_result result =
         | Declaration (declaration,sp,ep) ->
           (Printf.printf "# %d \"%s\"\n" sp.pos_lnum sp.pos_fname;
            Printf.printf "%s\n" declaration;
+           (* TODO: track output filename and line numbers! *)
            Printf.printf "# %d \"%s\"\n" 0 "<stdout>")
         | Definition _ -> ()
         | Trailer _ -> ())

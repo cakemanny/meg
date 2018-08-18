@@ -6,7 +6,7 @@ parse: { "hi" }
 let () =
   let input1 = string_view_of_string "an input" in
   match (parse input1) with
-  | Ok (value, (str, off, len)) ->
+  | Ok (value, (str, off, len), _) ->
     begin
       assert (value = "hi");
       assert (off = 0); (* An action should consume no input *)
