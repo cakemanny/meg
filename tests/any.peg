@@ -1,0 +1,28 @@
+
+parse: . . .
+;
+test2: ....
+
+%%
+
+let () =
+  let input = string_view_of_string "any" in
+  let () =
+    match (parse input) with
+    | Ok ('y', (_, _, 0)) -> ()
+    | Ok (value, (_,_,len)) ->
+      (Printf.eprintf
+        "expected 'y' and no remaining characters in remaining \
+        input but value was %c and there were %d characters of \
+        unconsumed input\n"
+        value len;
+       exit 1)
+    | Error msg -> (Printf.eprintf "%s\n" msg; exit 1)
+  in
+  let () =
+    match (test2 input) with
+    | Error "End of input" -> ()
+    | Error msg -> Printf.eprintf "Expected \"End of input\", was: %s\n" msg
+    | Ok (value, (_,_,len))  ->
+      (Printf.eprintf "Expected \"End of input\", was Ok('%c',_)\n" value; exit 1)
+  in exit 0

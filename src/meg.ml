@@ -330,7 +330,7 @@ let classmatch matchfn (str, off, len) =
   else
     Error \"nomatch\"
 
-(*TODO: implement read_any *)
+let read_any = classmatch (fun _ -> true)
 
 " in
   let classes = List.fold_left compile_classes [] rules in
@@ -420,7 +420,7 @@ let compile_result result =
 
 let () =
   match (Array.to_list Sys.argv) with
-  | [] -> Printf.eprintf("unreachable")
+  | [] -> assert false
   | progname :: [] ->
       (Printf.eprintf "usage: %s <filename>\n" progname; exit 1)
   | progname :: filename :: _ -> begin

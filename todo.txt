@@ -1,0 +1,11 @@
+- [x] Name checking
+- [x] implement read_any
+- [ ] Peeking
+- [ ] Capturing and yytext()
+- [ ] Change vars to apply to any node
+- [ ] Allow use of $1, $2, etc
+- [ ] Add -o to output flag
+- [ ] line number directives in output
+      - actions
+      - header and trailer sections
+- [ ] bitmaps for long character classes

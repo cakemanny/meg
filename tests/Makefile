@@ -1,5 +1,6 @@
 
-SRCS := classes.peg literals.peg repeats.peg actions.peg sequences.peg
+SRCS := classes.peg literals.peg repeats.peg actions.peg sequences.peg \
+	any.peg
 
 TARGETS := $(SRCS:.peg=.byte)
 
