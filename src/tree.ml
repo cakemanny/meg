@@ -1,5 +1,6 @@
 
-type grammar = section list
+type grammar =
+  section list
 and section =
   | Declaration of string
   | Definition of expr
@@ -21,9 +22,10 @@ and expr =
   | Predicate of string (* A predicate in the target language *)
   | Capture of expr (* subexpressions of a Capture capture any input matched *)
 
-let sprintf = Printf.sprintf
 
-let rec string_of_expr = function
+let rec string_of_expr =
+  let sprintf = Printf.sprintf in
+  function
   | Rule (s, e) -> sprintf "%s: %s\n" s @@ string_of_expr e
   | Alternate xs ->
     String.concat "\n  | " @@ List.map string_of_expr xs

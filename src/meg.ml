@@ -1,4 +1,3 @@
-(* module T = Tree *)
 
 let sprintf = Printf.sprintf
 
@@ -50,7 +49,7 @@ type caml_expr =
       subexpr : caml_expr
     }
   | CList of caml_expr list
-;;
+
 
 let spaces n =
   let b = Bytes.create n in
@@ -98,7 +97,7 @@ let nasty_global_classfn_lookup = ref []
 let sub_vars_text varmap inputstate text =
   (* In the default Genlex lexer . is illegal *)
   let lexer = Genlex.make_lexer ["."] in
-  let toks = lexer (Stream.of_string text) in
+  let tokens = lexer (Stream.of_string text) in
   let reversed_results = ref [] in
   let prepend s = reversed_results := s :: !reversed_results in
   let () =
@@ -115,10 +114,10 @@ let sub_vars_text varmap inputstate text =
         | Genlex.Kwd kwd -> prepend kwd
         | Genlex.Int i -> prepend @@ string_of_int i
         | Genlex.Float f -> prepend @@ string_of_float f)
-      toks
+      tokens
   in
   String.concat " " @@ List.rev !reversed_results
-;;
+
 
 (**
  * inputstate tracks the variable name of the input we are going to try to
@@ -155,6 +154,7 @@ let rec compile_node (inputstate, capture) =
     in
     let sub_vars_node = function
       | Action text -> Action (sub_vars_text varmap inputstate text)
+      | Predicate text -> Predicate (sub_vars_text varmap inputstate text)
       | other -> other
     in
     let final_ist = (inputstate + List.length es - 1) in
@@ -212,12 +212,14 @@ let rec compile_node (inputstate, capture) =
     }
   | NonEmptyRepeat expr
     -> compile_node (inputstate, capture) @@ Sequence [expr; Repeat expr]
-  | Capture expr -> (compile_node (inputstate, true) expr)
+  | Capture expr ->
+    (compile_node (inputstate, true) expr)
   | Name (name, None) -> CApp (CName name, input_n inputstate)
   | Name (name, Some varname)
     -> (*FIXME: Do something with the varname *)
     CApp (CName name, input_n inputstate)
-  | Literal lit -> CApp (CApp (CName "litmatch", CLit lit), input_n inputstate)
+  | Literal lit ->
+    CApp (CApp (CName "litmatch", CLit lit), input_n inputstate)
   | Class classlit ->
     let matchfn_name =
       List.assoc classlit !nasty_global_classfn_lookup
@@ -225,7 +227,7 @@ let rec compile_node (inputstate, capture) =
     CApp (CApp (CName "classmatch", CName matchfn_name), input_n inputstate)
   | Any -> CApp (CName "read_any", input_n inputstate)
   | Action text ->
-    (* Maybe want to do some "let varname=value1 in..." magic *)
+    (* variables should have been subbed by now *)
     CCtor ("Success", [CVerb ("(" ^ text ^ ")"); input_n inputstate])
   | Predicate text ->
     CVerb ("if (" ^ text ^ ") then Success ((), yyInput" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
@@ -242,11 +244,11 @@ let compile_class_pos classlit =
     | Lexer.RangeTok (cstart, cend) -> (
         if cstart > cend then
           raise @@ Invalid_argument classlit;
-        return @@ Printf.sprintf "('%s' <= c && c <= '%s')"
+        return @@ sprintf "('%s' <= c && c <= '%s')"
           (Char.escaped cstart) (Char.escaped cend)
       )
     | Lexer.CharTok c -> (
-        return @@ Printf.sprintf "(c = '%s')" @@ Char.escaped c
+        return @@ sprintf "(c = '%s')" @@ Char.escaped c
       )
     | Lexer.EofTok -> results
   in
@@ -286,12 +288,12 @@ let rec compile_classes result_list =
 
 
 let compile_rule = function
-  | Tree.Rule (name, expr) -> (
+  | Tree.Rule (name, expr) ->
       let compiled_node = compile_node (0,false) expr in
       let as_string = string_of_caml 2 compiled_node in
       Printf.printf "and %s yyInput0 = (\n  %s\n)\n" name as_string
-    )
   | _ -> assert false
+
 
 let compile_rules (rules : Tree.expr list) =
   (* TODO: create a rule lookup *)
@@ -346,16 +348,58 @@ let classmatch matchfn (str, off, len) =
   let (classlit2funcname, _) =
     List.fold_left
       (fun (map, idx) (classlit, classbody) ->
-         Printf.printf "let yyClassmatch%d c = %s\n\n" idx classbody;
-         (classlit, Printf.sprintf "yyClassmatch%d" idx) :: map, idx + 1)
+         Printf.printf "let yyClassMatch%d c = %s\n\n" idx classbody;
+         (classlit, sprintf "yyClassMatch%d" idx) :: map, idx + 1)
       ([], 0) unique_classes
   in
   let () = nasty_global_classfn_lookup := classlit2funcname in
   let () = Printf.printf "let rec _stub=()\n" in
   List.iter compile_rule rules
 
+
+let check_for_undefined (rules: Tree.expr list) =
+  let open Tree in
+  let rule_names =
+    List.map
+      (function
+        | Tree.Rule (name, _) -> name
+        | _ -> assert false)
+      rules
+  in
+  let rec check_rule =
+    function
+    | Alternate exprs
+    | Sequence exprs -> List.iter check_rule exprs
+    | Rule (_, expr)
+    | PeekFor expr
+    | PeekNot expr
+    | Optional expr
+    | Repeat expr
+    | NonEmptyRepeat expr
+    | Capture expr -> check_rule expr
+    | Name (name, _) ->
+      if List.mem name rule_names = false
+      then (Printf.eprintf "%s is not defined!\n" name; exit 1)
+    | Literal _
+    | Class _
+    | Any
+    | Action _
+    | Predicate _ -> ()
+in List.iter check_rule rules
+
+
 let compile_result result =
   let open Tree in
+  let rules =
+    List.fold_right
+      (* filter_map *)
+      (fun section xs ->
+         match section with
+         | Definition rule -> rule :: xs
+         | _ -> xs)
+      result []
+  in
+  let () = check_for_undefined rules in
   (* Print headers *)
   let () =
     List.iter
@@ -366,14 +410,7 @@ let compile_result result =
       result
   in
   (* compile nodes *)
-  let rules =
-    List.fold_right
-      (* filter_map *)
-      (fun section xs -> match section with
-         | Definition rule -> rule :: xs
-         | _ -> xs)
-      result []
-  in compile_rules rules;
+  compile_rules rules;
   (* dump trailer *)
   List.iter
     (function

@@ -1,0 +1,6 @@
+
+# This file should error with a complaint about missing_rule not being
+# defined
+
+parse: missing_rule
+
