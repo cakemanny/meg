@@ -165,7 +165,7 @@ let rec compile_node (inputstate, capture) =
           compile_node (final_ist, capture) (sub_vars_node first)
         in
         (compiled_first, List.rev nodes_rev)
-      | [] -> (CCtor ("Success", [value_n inputstate; input_n inputstate]), [])
+      | [] -> (CCtor ("Ok", [value_n inputstate; input_n inputstate]), [])
     ) in
     let (cexpr, _) =
       List.fold_right
@@ -173,7 +173,7 @@ let rec compile_node (inputstate, capture) =
            (CMatchExpr {
                matchee = (compile_node (ist-1,capture) (sub_vars_node node));
                patlist = [
-                 (CCtor ("Success", [value_n ist; input_n ist]), caml_expr);
+                 (CCtor ("Ok", [value_n ist; input_n ist]), caml_expr);
                  (CCtor ("Error", [CName "e"]),
                   CCtor ("Error", [CName "e"]))
                ]
@@ -187,13 +187,13 @@ let rec compile_node (inputstate, capture) =
     -> CMatchExpr {
         matchee = (compile_node (inputstate,capture) expr);
         patlist = [
-          CCtor ("Success", [value_n (inputstate+1);
-                             input_n (inputstate+1)]),
-          CCtor ("Success", [CCtor ("Some", [value_n (inputstate+1)]);
-                             input_n (inputstate+1)])
+          CCtor ("Ok", [value_n (inputstate+1);
+                        input_n (inputstate+1)]),
+          CCtor ("Ok", [CCtor ("Some", [value_n (inputstate+1)]);
+                        input_n (inputstate+1)])
           ;
           CCtor ("Error", [CName "_"]),
-          CCtor ("Success", [CCtor ("None", []); input_n (inputstate)])
+          CCtor ("Ok", [CCtor ("None", []); input_n (inputstate)])
           ;
         ]
       }
@@ -204,8 +204,8 @@ let rec compile_node (inputstate, capture) =
       def = CMatchExpr {
           matchee = (compile_node (0,capture) expr);
           patlist = [
-            CVerb "Success (v, i1)", CVerb "aux (v :: res) i1" ;
-            CVerb "Error _", CVerb "Success (res, yyInput0)" ;
+            CVerb "Ok (v, i1)", CVerb "aux (v :: res) i1" ;
+            CVerb "Error _", CVerb "Ok (res, yyInput0)" ;
           ]
         };
       subexpr = CApp (CApp (CName "aux", CList []), input_n inputstate)
@@ -228,9 +228,9 @@ let rec compile_node (inputstate, capture) =
   | Any -> CApp (CName "read_any", input_n inputstate)
   | Action text ->
     (* variables should have been subbed by now *)
-    CCtor ("Success", [CVerb ("(" ^ text ^ ")"); input_n inputstate])
+    CCtor ("Ok", [CVerb ("(" ^ text ^ ")"); input_n inputstate])
   | Predicate text ->
-    CVerb ("if (" ^ text ^ ") then Success ((), yyInput" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
+    CVerb ("if (" ^ text ^ ") then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
 
 
 let compile_class_pos classlit =
@@ -301,10 +301,8 @@ let compile_rules (rules : Tree.expr list) =
   (* TODO: check for left recursion *)
   let () = Printf.printf "%s" "
 type string_view = string * int * int
-let string_view_of_string s = (s, 0, String.length s)
 
-type 'a result = Success of 'a * string_view
-               | Error of string
+let string_view_of_string s = (s, 0, String.length s)
 
 let litmatch literal (str, off, len) =
   let lit_len = String.length literal in
@@ -320,7 +318,7 @@ let litmatch literal (str, off, len) =
         false
     in
     if (aux 0) then
-      Success (literal, (str, off+lit_len, len-lit_len))
+      Ok (literal, (str, off+lit_len, len-lit_len))
     else
       Error literal
 
@@ -328,7 +326,7 @@ let classmatch matchfn (str, off, len) =
   if len = 0 then
     Error \"End of input \"
   else if matchfn (str.[off]) then
-    Success (str.[off], (str, off+1, len-1))
+    Ok (str.[off], (str, off+1, len-1))
   else
     Error \"nomatch\"
 
