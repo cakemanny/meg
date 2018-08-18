@@ -24,8 +24,7 @@ open Tree
 %token <string> LITERAL
 %token <string> BRACES
 
-%token <string> DECLARATION
-%token <string> TRAILER
+%token <string * Lexing.position * Lexing.position> DECLARATION TRAILER
 
 %token EOF
 
@@ -46,10 +45,10 @@ grammar:
 | error { Printf.eprintf("There was an error in your syntax\n"); exit 1; [] }
 ;
 declaration:
-  d=DECLARATION { Declaration d }
+  d=DECLARATION { let (cnts,startp,endp) = d in Declaration (cnts,startp,endp) }
 ;
 trailer:
-  t=TRAILER { Trailer t }
+  t=TRAILER { let (cnts,startp,endp) = t in Trailer (cnts,startp,endp) }
 ;
 definition:
   n=IDENT COLON e=expression SEMI? { Definition (Rule (n,e)) }

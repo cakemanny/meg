@@ -22,7 +22,8 @@ let () =
   let () =
     match (test2 input) with
     | Error "End of input" -> ()
-    | Error msg -> Printf.eprintf "Expected \"End of input\", was: %s\n" msg
+    | Error msg ->
+        Printf.eprintf "Expected \"End of input\", was: \"%s\"\n" msg
     | Ok (value, (_,_,len))  ->
       (Printf.eprintf "Expected \"End of input\", was Ok('%c',_)\n" value; exit 1)
   in exit 0

@@ -63,9 +63,14 @@ let comment
 
 
 rule _token = parse
-  | "%{"              {read_declaration (Buffer.create 256) lexbuf}
+  | "%{"              {read_declaration
+                         (Buffer.create 256)
+                         (Lexing.lexeme_end_p lexbuf)
+                         lexbuf}
   | "%}"              {raise @@ error lexbuf "Unmatched '%%}'"}
-  | "%%" _* as trail  {TRAILER (String.sub trail 2 @@ (String.length trail - 2))}
+  | "%%" _* as trail  {TRAILER (Stringext.drop trail 2,
+                                Lexing.lexeme_start_p lexbuf,
+                                Lexing.lexeme_end_p lexbuf)}
   | '{' { BRACES (Buffer.contents @@ read_braces 0 (Buffer.create 32) lexbuf) }
   | '}'  {error lexbuf "Unmatched '}'"}
 
@@ -128,13 +133,13 @@ and read_literal_sgl buf =
   | eof { error lexbuf "Literal is not terminated" }
   | _ as c { error lexbuf "Illegal character in literal: %c" c }
 
-and read_declaration buf =
+and read_declaration buf startp =
   parse
-  | "%}" { DECLARATION (Buffer.contents buf) }
-  | '\n' { Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_declaration buf lexbuf }
+  | "%}" { DECLARATION (Buffer.contents buf, startp, Lexing.lexeme_start_p lexbuf) }
+  | '\n' { Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_declaration buf startp lexbuf }
   (* More efficient to add a big string while we are guaranteeds no end *)
-  | [^ '\n' '%']+ as s { Buffer.add_string buf s; read_declaration buf lexbuf }
-  | _ as c { Buffer.add_char buf c; read_declaration buf lexbuf  }
+  | [^ '\n' '%']+ as s { Buffer.add_string buf s; read_declaration buf startp lexbuf }
+  | _ as c { Buffer.add_char buf c; read_declaration buf startp lexbuf  }
   | eof { error lexbuf "Declaration section not terminated" }
 
 and read_braces level buf =
@@ -174,8 +179,8 @@ let string_of_tok = function
   | CLASS s ->  sprintf "CLASS<%s>" s
   | LITERAL s ->  sprintf "LITERAL<%s>" s
   | BRACES s -> sprintf "BRACES{%s}" s
-  | DECLARATION s -> sprintf "DECLARATION<%s>" s
-  | TRAILER s -> sprintf "TRAILER<%s>" s
+  | DECLARATION (s,_,_) -> sprintf "DECLARATION<%s>" s
+  | TRAILER (s,_,_) -> sprintf "TRAILER<%s>" s
   | EOF -> "EOF"
 
 let debug = false

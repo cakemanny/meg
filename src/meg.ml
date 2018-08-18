@@ -20,9 +20,9 @@ let parse filename (action : Tree.grammar -> unit)  =
 let print_result result =
   List.iter
     (function
-      | Tree.Declaration s -> Printf.printf "%%{%s%%}" s
+      | Tree.Declaration (s,_,_) -> Printf.printf "%%{%s%%}" s
       | Tree.Definition e -> Printf.printf "%s\n" @@ Tree.string_of_expr e
-      | Tree.Trailer s -> (print_endline "%%" ; print_endline s))
+      | Tree.Trailer (s,_,_) -> (print_endline "%%" ; print_endline s))
     result
 
 let default default_value =
@@ -324,7 +324,7 @@ let litmatch literal (str, off, len) =
 
 let classmatch matchfn (str, off, len) =
   if len = 0 then
-    Error \"End of input \"
+    Error \"End of input\"
   else if matchfn (str.[off]) then
     Ok (str.[off], (str, off+1, len-1))
   else
@@ -402,7 +402,10 @@ let compile_result result =
   let () =
     List.iter
       (function
-        | Declaration declaration -> Printf.printf "%s" declaration
+        | Declaration (declaration,sp,ep) ->
+          (Printf.printf "# %d \"%s\"\n" sp.pos_lnum sp.pos_fname;
+           Printf.printf "%s\n" declaration;
+           Printf.printf "# %d \"%s\"\n" 0 "<stdout>")
         | Definition _ -> ()
         | Trailer _ -> ())
       result
@@ -412,9 +415,12 @@ let compile_result result =
   (* dump trailer *)
   List.iter
     (function
-      | Declaration _ -> ()
+      | Declaration (_,_,_) -> ()
       | Definition _ -> ()
-      | Trailer trailer -> Printf.printf "%s" trailer)
+      | Trailer (trailer, sp, ep) ->
+          (Printf.printf "# %d \"%s\"\n" sp.pos_lnum sp.pos_fname;
+           Printf.printf "%s\n" trailer;
+           Printf.printf "# %d \"%s\"\n" 0 "<stdout>"))
     result
 
 

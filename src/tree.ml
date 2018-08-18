@@ -2,9 +2,9 @@
 type grammar =
   section list
 and section =
-  | Declaration of string
+  | Declaration of string * Lexing.position * Lexing.position
   | Definition of expr
-  | Trailer of string
+  | Trailer of string * Lexing.position * Lexing.position
 and expr =
   | Rule of string * expr
   | Alternate of expr list

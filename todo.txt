@@ -6,6 +6,6 @@
 - [ ] Allow use of $1, $2, etc
 - [ ] Add -o to output flag
 - [ ] line number directives in output
-      - actions
-      - header and trailer sections
+      - [x] header and trailer sections
+      - [ ] actions
 - [ ] bitmaps for long character classes
