@@ -1,6 +1,6 @@
 - [x] Name checking
 - [x] implement read_any
-- [ ] Peeking
+- [x] Peeking
 - [x] Capturing and yytext
 - [ ] Change vars to apply to any node
 - [ ] Allow use of $1, $2, etc

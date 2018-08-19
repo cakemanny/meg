@@ -186,8 +186,31 @@ let rec compile_node inputstate =
             (ist - 1)))
         nodes (first, inputstate + List.length nodes)
     in cexpr
-  | PeekFor expr -> CVerb "(* PeekFor *)"
-  | PeekNot expr -> CVerb "(* PeekNot *)"
+  | PeekFor expr ->
+    CMatchExpr {
+        matchee = (compile_node inputstate expr);
+        patlist = [
+          CCtor ("Ok", [CName "_"; CName "_"; CName "_"]),
+          CCtor ("Ok", [CName "()"; input_n inputstate; cn_yytext])
+          ;
+          CCtor ("Error", [CName "e"]),
+          CCtor ("Error", [CName "e"])
+          ;
+        ]
+
+    }
+  | PeekNot expr ->
+    CMatchExpr {
+        matchee = (compile_node inputstate expr);
+        patlist = [
+          CCtor ("Error", [CName "_"]),
+          CCtor ("Ok", [CName "()"; input_n inputstate; cn_yytext])
+          ;
+          CCtor ("Ok", [CName "_"; CName "_"; CName "_"]),
+          CCtor ("Error", [CVerb "\"Expected not to match ...\""])
+          ;
+        ]
+    }
   | Optional expr
     -> CMatchExpr {
         matchee = (compile_node inputstate expr);
@@ -197,8 +220,7 @@ let rec compile_node inputstate =
                         cn_yytext]),
           CCtor ("Ok", [CCtor ("Some", [value_n (inputstate+1)]);
                         input_n (inputstate+1);
-                        cn_yytext
-                       ])
+                        cn_yytext])
           ;
           CCtor ("Error", [CName "_"]),
           CCtor ("Ok", [CCtor ("None", []); input_n (inputstate); cn_yytext])

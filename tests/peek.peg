@@ -1,0 +1,39 @@
+
+# words with at least one lower case letter
+peek_for: &[ab] [bc]
+;
+peek_not: ![ab] [bc]
+;
+peek_end: "rosy" !.
+
+%%
+
+let () =
+  let failed = ref false in
+  let is_match = function Ok _ -> true | Error _ -> false in
+  List.iter
+    (fun (fn, input, expected) ->
+      if is_match (fn (string_view_of_string input)) = expected then
+        ()
+      else
+        (Printf.eprintf "Failed on input %s\n" input; failed := true))
+    [
+      peek_for, "a", false;
+      peek_for, "b", true;
+      peek_for, "c", false;
+      peek_not, "a", false;
+      peek_not, "b", false;
+      peek_not, "c", true;
+    ];
+  match (peek_end (string_view_of_string "rosy and jim")) with
+  | Error _ -> ()
+  | Ok _ -> (Printf.eprintf "Expected !. to require whole text match\n";
+             failed := true)
+  ;
+  match (peek_end (string_view_of_string "rosy")) with
+  | Ok _ -> ()
+  | Error _ -> (Printf.eprintf "Expected input \"rosy\" to match rule \"rosy\"!\n";
+                failed := true)
+  ;
+  if !failed then exit 1
+

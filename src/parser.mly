@@ -63,7 +63,7 @@ sequence:
 ;
 prefix:
   AMP pred=BRACES { Predicate pred }
-| AMP s=suffix { PeekNot s }
+| AMP s=suffix { PeekFor s }
 | NOT s=suffix  { PeekNot s }
 | s=suffix { s }
 ;
