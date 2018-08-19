@@ -1,0 +1,49 @@
+%{
+let printf = Printf.printf
+let vars = Array.make 26 0
+%}
+
+stmt    : - e=Expr EOL                  { printf "%d\n" e }
+        | ( !EOL . )* EOL               { printf "error\n" }
+;
+Expr    : i=ID ASSIGN s=Sum             { vars.(i) <- s; s }
+        | s=Sum                         { s }
+;
+Sum     : l=Product
+             rs=( PLUS  r=Product       { fun v -> v + r }
+                | MINUS r=Product       { fun v -> v - r }
+                )*                      { List.fold_right (fun f v -> f v) rs l }
+;
+Product : l=Value
+             rs=( TIMES  r=Value        { fun v -> v + r }
+                | DIVIDE r=Value        { fun v -> v / r }
+                )*                      { List.fold_right (fun f v -> f v) rs l }
+;
+Value   : i=NUMBER                      { i }
+        | i=ID !ASSIGN                  { vars.(i) }
+        | OPEN i=Expr CLOSE             { i }
+;
+NUMBER  : < [0-9]+ >    -               { int_of_string yytext };
+ID      : < [a-z]  >    -               { Char.(code yytext.[0] - code 'a') };
+ASSIGN  : '='           - ;
+PLUS    : '+'           - ;
+MINUS   : '-'           - ;
+TIMES   : '*'           - ;
+DIVIDE  : '/'           - ;
+OPEN    : '('           - ;
+CLOSE   : ')'           - ;
+
+-       : [ \t]* ;
+EOL     : '\n' | '\r\n' | '\r' | ';' | !. {""};
+
+%%
+
+let () =
+  let matched = ref true in
+  while !matched do
+    let input = input_line stdin in
+    let result = stmt (string_view_of_string input) in
+    match result with
+    | Error msg -> (matched := false; Printf.eprintf "Error: %s\n" msg)
+    | _ -> flush stdout
+  done
