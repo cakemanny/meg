@@ -15,7 +15,7 @@ Sum     : l=Product
                 )*                      { List.fold_right (fun f v -> f v) rs l }
 ;
 Product : l=Value
-             rs=( TIMES  r=Value        { fun v -> v + r }
+             rs=( TIMES  r=Value        { fun v -> v * r }
                 | DIVIDE r=Value        { fun v -> v / r }
                 )*                      { List.fold_right (fun f v -> f v) rs l }
 ;
@@ -39,11 +39,10 @@ EOL     : '\n' | '\r\n' | '\r' | ';' | !. {""};
 %%
 
 let () =
-  let matched = ref true in
-  while !matched do
+  let rec loop () =
     let input = input_line stdin in
     let result = stmt (string_view_of_string input) in
     match result with
-    | Error msg -> (matched := false; Printf.eprintf "Error: %s\n" msg)
-    | _ -> flush stdout
-  done
+    | Ok _ -> flush stdout; loop ()
+    | Error msg -> Printf.eprintf "Error: %s\n" msg
+  in loop ()
