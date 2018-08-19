@@ -67,11 +67,14 @@ let rec string_of_caml ilvl =
   let nl1 = nl ^ "  " in
   function
   | CMatchExpr { matchee; patlist } ->
-    let strpat (p,e) =
-      (nl ^ "| " ^ (string_of_caml ilvl p) ^ " -> (" ^ nl1 ^ (string_of_caml (ilvl+2) e) ^ nl ^ ")")
+    let strpat (p, e) =
+      nl ^ "| " ^ (string_of_caml ilvl p) ^ " -> (" ^
+      nl1 ^ (string_of_caml (ilvl+2) e) ^
+      nl ^ ")"
     in
-    sprintf "match (%s%s%s) with%s" nl1
-      (string_of_caml (ilvl+2) matchee) nl @@ String.concat "" @@ List.map strpat patlist
+    sprintf "match (%s%s%s) with%s"
+      nl1 (string_of_caml (ilvl+2) matchee) nl
+      @@ String.concat "" @@ List.map strpat patlist
   | CName name -> name
   | CLit lit -> sprintf "\"%s\"" @@ String.escaped lit
   | CCtor (ctor, cexprs) -> (
@@ -80,18 +83,29 @@ let rec string_of_caml ilvl =
       | _ -> sprintf "%s %s" ctor @@ string_of_caml ilvl (CTuple cexprs)
     )
   | CVerb verbatim -> verbatim
-  | CTuple cexprs -> "(" ^ (String.concat ", " @@ List.map (string_of_caml ilvl) cexprs) ^ ")"
-  | CApp (e1, e2) -> sprintf "(%s) (%s)" (string_of_caml ilvl e1) (string_of_caml ilvl e2)
+  | CTuple cexprs ->
+    "(" ^ (String.concat ", " @@ List.map (string_of_caml ilvl) cexprs) ^ ")"
+  | CApp (e1, e2) ->
+    sprintf "%s (%s)"
+      (string_of_caml ilvl e1)
+      (string_of_caml ilvl e2)
   | CLet { pat; def; subexpr } ->
     sprintf "let %s = (%s%s%s) in (%s%s%s)"
       (string_of_caml ilvl pat)
-      nl1 (string_of_caml (ilvl+2) def) nl nl1 (string_of_caml (ilvl+2) subexpr) nl
+      nl1 (string_of_caml (ilvl+2) def) nl
+      nl1 (string_of_caml (ilvl+2) subexpr) nl
   | CLetRec { name; args; def; subexpr } ->
     sprintf "let rec %s %s = (%s%s%s) in (%s%s%s)"
-      name (String.concat " " @@  List.map (string_of_caml ilvl) args)
-      nl1 (string_of_caml (ilvl+2) def) nl nl1 (string_of_caml (ilvl+2) subexpr) nl
-  | CList exprs -> "[" ^ (String.concat "; " @@ List.map (string_of_caml ilvl) exprs) ^"]"
-  | CSeq exprs -> "(" ^ nl1 ^ (String.concat "; " @@ List.map (string_of_caml (ilvl+2)) exprs) ^ nl ^ ")"
+      name
+      (String.concat " " @@  List.map (string_of_caml ilvl) args)
+      nl1 (string_of_caml (ilvl+2) def) nl
+      nl1 (string_of_caml (ilvl+2) subexpr) nl
+  | CList exprs ->
+    "[" ^ (String.concat "; " @@ List.map (string_of_caml ilvl) exprs) ^ "]"
+  | CSeq exprs ->
+    "(" ^ nl1 ^
+    (String.concat "; " @@ List.map (string_of_caml (ilvl+2)) exprs) ^
+    nl ^ ")"
 
 
 module SetString = Set.Make(String)
@@ -146,7 +160,7 @@ let rec compile_node inputstate =
         (* we backtrack each input, so the inputstate does not advance *)
          (fun node caml_expr ->
             CMatchExpr {
-              matchee = (compile_node inputstate node);
+              matchee = compile_node inputstate node;
               patlist = [
                 CCtor ("Error", [CName "e"]), caml_expr;
                 (* if not error, then return *)
@@ -185,7 +199,7 @@ let rec compile_node inputstate =
       List.fold_right
         (fun node (caml_expr, ist) ->
            (CMatchExpr {
-               matchee = (compile_node (ist-1) (define_vars_node node));
+               matchee = compile_node (ist-1) (define_vars_node node);
                patlist = [
                  (CCtor ("Ok", [value_n ist; input_n ist]), caml_expr);
                  (CCtor ("Error", [CName "e"]),
@@ -197,7 +211,7 @@ let rec compile_node inputstate =
     in cexpr
   | PeekFor expr ->
     CMatchExpr {
-        matchee = (compile_node inputstate expr);
+        matchee = compile_node inputstate expr;
         patlist = [
           CCtor ("Ok", [CName "_"; CName "_"]),
           CCtor ("Ok", [CName "()"; input_n inputstate])
@@ -210,7 +224,7 @@ let rec compile_node inputstate =
     }
   | PeekNot expr ->
     CMatchExpr {
-        matchee = (compile_node inputstate expr);
+        matchee = compile_node inputstate expr;
         patlist = [
           CCtor ("Error", [CName "_"]),
           CCtor ("Ok", [CName "()"; input_n inputstate])
@@ -222,7 +236,7 @@ let rec compile_node inputstate =
     }
   | Optional expr
     -> CMatchExpr {
-        matchee = (compile_node inputstate expr);
+        matchee = compile_node inputstate expr;
         patlist = [
           CCtor ("Ok", [value_n (inputstate+1); input_n (inputstate+1)]),
           CCtor ("Ok", [CCtor ("Some", [value_n (inputstate+1)]);
@@ -238,7 +252,7 @@ let rec compile_node inputstate =
       name = "aux";
       args = [CName "res"; CName "yyInput0"];
       def = CMatchExpr {
-          matchee = (compile_node 0 expr);
+          matchee = compile_node 0 expr;
           patlist = [
             CVerb "Ok (v, i1)", CVerb "aux (v :: res) i1" ;
             CVerb "Error _", CVerb "Ok (res, yyInput0)" ;
@@ -264,7 +278,10 @@ let rec compile_node inputstate =
                  CCtor (
                    "Ok", [
                      CName "v";
-                     CVerb "(str, off_end, len, String.sub str off_start (off_end - off_start))"
+                     CTuple [
+                       CName "str"; CName "off_end"; CName "len";
+                       CVerb "String.sub str off_start (off_end - off_start)"
+                     ]
                    ]
                  )
              }
@@ -277,13 +294,13 @@ let rec compile_node inputstate =
   | Name name ->
     CApp (CName (to_rule_name name), input_n inputstate)
   | Literal lit ->
-    CApp (CApp (CName "litmatch", CLit lit), input_n inputstate)
+    CApp (CApp (CName "yyMatchLiteral", CLit lit), input_n inputstate)
   | Class classlit ->
     let matchfn_name =
       List.assoc classlit !nasty_global_classfn_lookup
     in
-    CApp (CApp (CName "classmatch", CName matchfn_name), input_n inputstate)
-  | Any -> CApp (CName "read_any", input_n inputstate)
+    CApp (CApp (CName "yyMatchClass", CName matchfn_name), input_n inputstate)
+  | Any -> CApp (CName "yyMatchAny", input_n inputstate)
   | Action text ->
     let action_expr =
       (* TODO: spit out source file line numbers *)
@@ -300,7 +317,11 @@ let rec compile_node inputstate =
   | Predicate text ->
     let action_expr =
       (* TODO: spit out source file line numbers *)
-      CVerb ("if (" ^ text ^ ") then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
+      CVerb (
+        "if (" ^ text ^ ") " ^
+        "then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ") " ^
+        "else Error \"custom predicate failed: " ^ String.escaped text ^ "\""
+      )
     in
     (match Stringext.find_from text ~pattern:"yytext" with
      | Some _ ->
@@ -384,7 +405,7 @@ let string_view_of_string s = (s, 0, String.length s, \"\")
 
 type 'a parse_result = ('a * string_view, string) result
 
-let litmatch literal (str, off, len, yytext) : string parse_result =
+let yyMatchLiteral literal (str, off, len, yytext) : string parse_result =
   let lit_len = String.length literal in
   if lit_len > len then
     Error \"End of input\"
@@ -402,7 +423,7 @@ let litmatch literal (str, off, len, yytext) : string parse_result =
     else
       Error literal
 
-let classmatch matchfn (str, off, len, yytext) : char parse_result =
+let yyMatchClass matchfn (str, off, len, yytext) : char parse_result =
   if len = 0 then
     Error \"End of input\"
   else if matchfn (str.[off]) then
@@ -410,7 +431,7 @@ let classmatch matchfn (str, off, len, yytext) : char parse_result =
   else
     Error \"nomatch\"
 
-let read_any = classmatch (fun _ -> true)
+let yyMatchAny = yyMatchClass (fun _ -> true)
 
 " in
   let classes = List.fold_left compile_classes [] rules in
@@ -426,8 +447,8 @@ let read_any = classmatch (fun _ -> true)
   let (classlit2funcname, _) =
     List.fold_left
       (fun (map, idx) (classlit, classbody) ->
-         Printf.printf "let yyClassMatch%d c = %s\n\n" idx classbody;
-         (classlit, sprintf "yyClassMatch%d" idx) :: map, idx + 1)
+         Printf.printf "let yyClassMatcher%d c = %s\n\n" idx classbody;
+         (classlit, sprintf "yyClassMatcher%d" idx) :: map, idx + 1)
       ([], 0) unique_classes
   in
   let () = nasty_global_classfn_lookup := classlit2funcname in
