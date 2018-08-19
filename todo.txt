@@ -2,7 +2,7 @@
 - [x] implement read_any
 - [x] Peeking
 - [x] Capturing and yytext
-- [ ] Change vars to apply to any node
+- [x] Change vars to apply to any node
 - [ ] Allow use of $1, $2, etc
 - [x] Change from text replacement to prepend lets in var definition
 - [ ] Add -o to output flag

@@ -14,13 +14,14 @@ and expr =
   | Optional of expr
   | Repeat of expr
   | NonEmptyRepeat of expr
-  | Name of string * string option (* varname *)
+  | Capture of expr (* subexpressions of a Capture capture any input matched *)
+  | Assign of string * expr
+  | Name of string
   | Literal of string
   | Class of string
   | Any
   | Action of string (* Code to execute in the target language *)
   | Predicate of string (* A predicate in the target language *)
-  | Capture of expr (* subexpressions of a Capture capture any input matched *)
 
 
 let rec string_of_expr =
@@ -35,15 +36,12 @@ let rec string_of_expr =
   | Optional e -> sprintf "(%s)?" @@ string_of_expr e
   | Repeat e -> sprintf "(%s)*" @@ string_of_expr e
   | NonEmptyRepeat e -> sprintf "(%s)+" @@ string_of_expr e
-  | Name (n, v) -> (
-      match v with
-      | Some varname -> sprintf "%s=%s" varname n
-      | None -> n
-    )
+  | Capture e -> sprintf "< %s >" (string_of_expr e)
+  | Assign (n, e) -> sprintf "%s=%s" n (string_of_expr e)
+  | Name n -> n
   | Literal s -> sprintf "\"%s\"" @@ String.escaped s
   | Class s -> sprintf "[%s]" s (* These have retained their [ ] *)
   | Any -> "."
   | Action s -> sprintf "{ %s }" s
   | Predicate s -> sprintf "&{ %s }" s
-  | Capture e -> sprintf "< %s >" (string_of_expr e)
 

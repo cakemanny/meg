@@ -159,7 +159,7 @@ let rec compile_node inputstate =
       List.fold_left
         (fun (varmap, i) e ->
            match e with
-           | Name (_, Some varname) -> (varname, i) :: varmap, i+1
+           | Assign (varname, _) -> (varname, i) :: varmap, i+1
            | _ -> varmap, i+1
         )
         ([], 1) es
@@ -250,7 +250,7 @@ let rec compile_node inputstate =
     -> compile_node inputstate @@ Sequence [expr; Repeat expr]
   | Capture expr ->
     CMatchExpr {
-      matchee = (compile_node inputstate expr);
+      matchee = compile_node inputstate expr;
       patlist = [
         (CCtor ("Ok", [ CName "v"; CName "remaining_input" ]),
          CLet {
@@ -273,10 +273,8 @@ let rec compile_node inputstate =
          CCtor ("Error", [CName "e"]) )
       ]
     }
-  | Name (name, None) ->
-    CApp (CName (to_rule_name name), input_n inputstate)
-  | Name (name, Some varname)
-    -> (*FIXME: Do something with the varname *)
+  | Assign (_, expr) -> compile_node inputstate expr
+  | Name name ->
     CApp (CName (to_rule_name name), input_n inputstate)
   | Literal lit ->
     CApp (CApp (CName "litmatch", CLit lit), input_n inputstate)
@@ -358,8 +356,9 @@ let rec compile_classes result_list =
   | Repeat expr
   | NonEmptyRepeat expr
   | Capture expr
+  | Assign (_,expr)
     -> compile_classes result_list expr
-  | Name (_, _)
+  | Name _
   | Literal _
   | Any
   | Action _
@@ -455,8 +454,9 @@ let check_for_undefined (rules: Tree.expr list) =
     | Optional expr
     | Repeat expr
     | NonEmptyRepeat expr
-    | Capture expr -> check_rule expr
-    | Name (name, _) ->
+    | Capture expr
+    | Assign (_, expr)-> check_rule expr
+    | Name name ->
       if List.mem name rule_names = false
       then (Printf.eprintf "%s is not defined!\n" name; exit 1)
     | Literal _

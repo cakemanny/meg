@@ -65,6 +65,7 @@ prefix:
   AMP pred=BRACES { Predicate pred }
 | AMP s=suffix { PeekFor s }
 | NOT s=suffix  { PeekNot s }
+| n=IDENT EQUAL s=suffix { Assign (n, s)  }
 | s=suffix { s }
 ;
 suffix:
@@ -74,8 +75,7 @@ suffix:
 | p=primary PLUS { NonEmptyRepeat p }
 ;
 primary:
-  varname=IDENT EQUAL name=IDENT (* !: *) { Name (name, Some varname) }
-| name=IDENT (* !: *) { Name (name, None) }
+  name=IDENT (* !: *) { Name name }
 | LPAREN e=expression RPAREN { e }
 | l=LITERAL { Literal l }
 | c=CLASS { Class c }
