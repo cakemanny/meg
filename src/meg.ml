@@ -113,11 +113,21 @@ let define_vars_text varmap inputstate text =
   |> String.concat " "
 
 
-(* We allow hyphens in identifiers, which are not valid ocaml names *)
+(* We allow hyphens in identifiers, which are not valid ocaml names
+ * We allow uppercase rulenames - they don't get exported *)
 let to_rule_name =
-  function
-  | "-" -> "yy_blank"
-  | name -> Stringext.replace_all name ~pattern:"-" ~with_:"_"
+  let handle_dashes =
+    function
+    | "-" -> "yy_blank"
+    | name -> Stringext.replace_all name ~pattern:"-" ~with_:"_"
+  in
+  let handle_uppercase name =
+    if name.[0] = Char.uppercase_ascii name.[0] then
+      "yy_" ^ name
+    else
+      name
+  in
+  fun name -> handle_uppercase @@ handle_dashes name
 
 
 (**
@@ -129,7 +139,6 @@ let rec compile_node inputstate =
   let statevar name n = CName (sprintf "%s%d" name n) in
   let input_n = statevar "yyInput" in
   let value_n = statevar "yyValue" in
-  let cn_yytext = CName "yytext" in
   function
   | Rule (_,_) -> assert false
   | Alternate es (* chain matches on the error case *)
@@ -169,7 +178,7 @@ let rec compile_node inputstate =
         in
         (compiled_first, List.rev nodes_rev)
       | [] ->
-        (CCtor ("Ok", [value_n inputstate; input_n inputstate; cn_yytext]),
+        (CCtor ("Ok", [value_n inputstate; input_n inputstate]),
          [])
     ) in
     let (cexpr, _) =
@@ -178,7 +187,7 @@ let rec compile_node inputstate =
            (CMatchExpr {
                matchee = (compile_node (ist-1) (define_vars_node node));
                patlist = [
-                 (CCtor ("Ok", [value_n ist; input_n ist; cn_yytext]), caml_expr);
+                 (CCtor ("Ok", [value_n ist; input_n ist]), caml_expr);
                  (CCtor ("Error", [CName "e"]),
                   CCtor ("Error", [CName "e"]))
                ]
@@ -190,8 +199,8 @@ let rec compile_node inputstate =
     CMatchExpr {
         matchee = (compile_node inputstate expr);
         patlist = [
-          CCtor ("Ok", [CName "_"; CName "_"; CName "_"]),
-          CCtor ("Ok", [CName "()"; input_n inputstate; cn_yytext])
+          CCtor ("Ok", [CName "_"; CName "_"]),
+          CCtor ("Ok", [CName "()"; input_n inputstate])
           ;
           CCtor ("Error", [CName "e"]),
           CCtor ("Error", [CName "e"])
@@ -204,9 +213,9 @@ let rec compile_node inputstate =
         matchee = (compile_node inputstate expr);
         patlist = [
           CCtor ("Error", [CName "_"]),
-          CCtor ("Ok", [CName "()"; input_n inputstate; cn_yytext])
+          CCtor ("Ok", [CName "()"; input_n inputstate])
           ;
-          CCtor ("Ok", [CName "_"; CName "_"; CName "_"]),
+          CCtor ("Ok", [CName "_"; CName "_"]),
           CCtor ("Error", [CVerb "\"Expected not to match ...\""])
           ;
         ]
@@ -215,15 +224,12 @@ let rec compile_node inputstate =
     -> CMatchExpr {
         matchee = (compile_node inputstate expr);
         patlist = [
-          CCtor ("Ok", [value_n (inputstate+1);
-                        input_n (inputstate+1);
-                        cn_yytext]),
+          CCtor ("Ok", [value_n (inputstate+1); input_n (inputstate+1)]),
           CCtor ("Ok", [CCtor ("Some", [value_n (inputstate+1)]);
-                        input_n (inputstate+1);
-                        cn_yytext])
+                        input_n (inputstate+1)])
           ;
           CCtor ("Error", [CName "_"]),
-          CCtor ("Ok", [CCtor ("None", []); input_n (inputstate); cn_yytext])
+          CCtor ("Ok", [CCtor ("None", []); input_n inputstate])
           ;
         ]
       }
@@ -234,8 +240,8 @@ let rec compile_node inputstate =
       def = CMatchExpr {
           matchee = (compile_node 0 expr);
           patlist = [
-            CVerb "Ok (v, i1, _)", CVerb "aux (v :: res) i1" ;
-            CVerb "Error _", CVerb "Ok (res, yyInput0, yytext)" ;
+            CVerb "Ok (v, i1)", CVerb "aux (v :: res) i1" ;
+            CVerb "Error _", CVerb "Ok (res, yyInput0)" ;
           ]
         };
       subexpr = CApp (CApp (CName "aux", CList []), input_n inputstate)
@@ -246,19 +252,19 @@ let rec compile_node inputstate =
     CMatchExpr {
       matchee = (compile_node inputstate expr);
       patlist = [
-        (CCtor ("Ok", [CName "v"; CName "remaining_input"; CName "_" ]),
+        (CCtor ("Ok", [ CName "v"; CName "remaining_input" ]),
          CLet {
-           pat = CTuple [ CName "str"; CName "off_start"; CName "_" ];
+           pat = CTuple [ CName "_"; CName "off_start"; CName "_"; CName "_" ];
            def = input_n inputstate;
            subexpr =
              CLet {
-               pat = CTuple [ CName "_"; CName "off_end"; CName "_" ];
+               pat = CTuple [ CName "str"; CName "off_end"; CName "len"; CName "_" ];
                def = CName "remaining_input";
                subexpr =
                  CCtor (
                    "Ok", [
-                     CName "v"; CName "remaining_input";
-                     CVerb "String.sub str off_start (off_end - off_start)"
+                     CName "v";
+                     CVerb "(str, off_end, len, String.sub str off_start (off_end - off_start))"
                    ]
                  )
              }
@@ -267,7 +273,8 @@ let rec compile_node inputstate =
          CCtor ("Error", [CName "e"]) )
       ]
     }
-  | Name (name, None) -> CApp (CName name, input_n inputstate)
+  | Name (name, None) ->
+    CApp (CName (to_rule_name name), input_n inputstate)
   | Name (name, Some varname)
     -> (*FIXME: Do something with the varname *)
     CApp (CName (to_rule_name name), input_n inputstate)
@@ -280,11 +287,31 @@ let rec compile_node inputstate =
     CApp (CApp (CName "classmatch", CName matchfn_name), input_n inputstate)
   | Any -> CApp (CName "read_any", input_n inputstate)
   | Action text ->
-    (* TODO: spit out sourc file line numbers *)
-    CCtor ("Ok", [CVerb ("(" ^ text ^ ")"); input_n inputstate; cn_yytext])
+    let action_expr =
+      (* TODO: spit out source file line numbers *)
+      CCtor ("Ok", [CVerb ("(" ^ text ^ ")"); input_n inputstate])
+    in
+    (match Stringext.find_from text ~pattern:"yytext" with
+     | Some _ ->
+       CLet {
+         pat = CTuple [CName "_"; CName "_"; CName "_"; CName "yytext" ];
+         def = input_n inputstate;
+         subexpr = action_expr;
+       }
+     | None -> action_expr)
   | Predicate text ->
-    (* TODO: spit out sourc file line numbers *)
-    CVerb ("if (" ^ text ^ ") then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ", yytext) else Error \"custom predicate failed\"")
+    let action_expr =
+      (* TODO: spit out source file line numbers *)
+      CVerb ("if (" ^ text ^ ") then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ") else Error \"custom predicate failed\"")
+    in
+    (match Stringext.find_from text ~pattern:"yytext" with
+     | Some _ ->
+       CLet {
+         pat = CTuple [CName "_"; CName "_"; CName "_"; CName "yytext" ];
+         def = input_n inputstate;
+         subexpr = action_expr;
+       }
+     | None -> action_expr)
 
 
 let compile_class_pos classlit =
@@ -352,14 +379,13 @@ let compile_rule = function
 let compile_rules (rules : Tree.expr list) =
   (* TODO: create a rule lookup *)
   let () = Printf.printf "%s" "
-type string_view = string * int * int
+type string_view = string * int * int * string
 
-let string_view_of_string s = (s, 0, String.length s)
+let string_view_of_string s = (s, 0, String.length s, \"\")
 
-(* default value for yytext *)
-let yytext = \"\"
+type 'a parse_result = ('a * string_view, string) result
 
-let litmatch literal (str, off, len) =
+let litmatch literal (str, off, len, yytext) : string parse_result =
   let lit_len = String.length literal in
   if lit_len > len then
     Error \"End of input\"
@@ -373,15 +399,15 @@ let litmatch literal (str, off, len) =
         false
     in
     if (aux 0) then
-      Ok (literal, (str, off+lit_len, len-lit_len), \"\")
+      Ok (literal, (str, off+lit_len, len-lit_len, yytext))
     else
       Error literal
 
-let classmatch matchfn (str, off, len) =
+let classmatch matchfn (str, off, len, yytext) : char parse_result =
   if len = 0 then
     Error \"End of input\"
   else if matchfn (str.[off]) then
-    Ok (str.[off], (str, off+1, len-1), \"\")
+    Ok (str.[off], (str, off+1, len-1, yytext))
   else
     Error \"nomatch\"
 

@@ -8,8 +8,8 @@ parse2: "hallo"
 let () =
   let input1 = string_view_of_string "hello there darling" in
   match (parse1 input1) with
-| Ok (value, remaining_input, _) ->
-    let (str, off, len) = remaining_input in
+| Ok (value, remaining_input) ->
+    let (_, off, len, _) = remaining_input in
     (assert (value = "hello");
      assert (off = 5 && len = 14))
 | Error msg -> (Printf.printf "No match: %s\n" msg; exit 1)

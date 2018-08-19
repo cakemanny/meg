@@ -16,8 +16,8 @@ letter: [A-Za-z]
 let () =
   let input = string_view_of_string "a and b" in
   match (parse input) with
-  | Ok ("ab", (_, _, len), _) -> exit 0
-  | Ok (value, _, _) ->
+  | Ok ("ab", (_, _, len, _)) -> exit 0
+  | Ok (value, _) ->
       (Printf.eprintf "Expected match, after action, to be \"ab\", actual: %s"
         value;
        exit 1)

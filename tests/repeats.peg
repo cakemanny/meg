@@ -6,7 +6,7 @@ rep0: 'a' 'b'* 'c'
 let failed = ref false
 
 let () =
-  let is_match = function Ok (_,(_,_,len), _) -> len=0 | Error _ -> false in
+  let is_match = function Ok (_,(_,_,len,_)) -> len=0 | Error _ -> false in
   let test (rule, input, expected) =
     let result = rule (string_view_of_string input) in
     if is_match result <> expected

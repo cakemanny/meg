@@ -1,12 +1,14 @@
 
-parse: < [A-Za-z_]+ > ' '* { yytext }
+parse: < [A-Za-z_]+ > - { yytext }
+;
+ -   : [ ]*;
 
 %%
 
 let () =
   let input = string_view_of_string "meg is great" in
   match (parse input) with
-  | Ok ("meg", _, _) -> ()
-  | Ok (value, _, _) ->
-    (Printf.eprintf "Incorrect value, expected: \"meg\", actual: %s" value; exit 1)
+  | Ok ("meg", _) -> ()
+  | Ok (value, _) ->
+    (Printf.eprintf "Incorrect value, expected: \"meg\", actual: \"%s\"\n" value; exit 1)
   | Error msg -> (Printf.eprintf "Error: %s" msg; exit 1)
