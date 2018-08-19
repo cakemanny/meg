@@ -1,1 +1,1 @@
-true: package(stringext), bin_annot, explain
+true: package(stringext), package(str), bin_annot, explain

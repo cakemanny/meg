@@ -42,7 +42,7 @@ let unescape_char s =
   else s.[0]
 }
 
-let ident_start = ['a'-'z' 'A'-'Z' '_']
+let ident_start = ['-''a'-'z' 'A'-'Z' '_']
 let ident_cont  = ident_start | ['0'-'9']
 let identifier  = ident_start ident_cont*
 

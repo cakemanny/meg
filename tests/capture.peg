@@ -1,4 +1,4 @@
-
+# TODO: Check: < [a-z]+ > { yytext }
 parse: < [A-Za-z_]+ > { yytext }
 
 %%
@@ -6,7 +6,7 @@ parse: < [A-Za-z_]+ > { yytext }
 let () =
   let input = string_view_of_string "meg is great" in
   match (parse input) with
-  | Ok ("meg", remaining, _) ->
+  | Ok ("meg", remaining, _) -> ()
   | Ok (value, remaining, _) ->
-    Printf.eprintf "Incorrect value, expected: \"meg\", actual: %s" value
-  | Error msg -> Printf.eprintf "Error: %s" msg
+    (Printf.eprintf "Incorrect value, expected: \"meg\", actual: %s" value; exit 1)
+  | Error msg -> (Printf.eprintf "Error: %s" msg; exit 1)

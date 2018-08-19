@@ -99,35 +99,25 @@ module MapString = Map.Make(String)
 
 let nasty_global_classfn_lookup = ref []
 
-(**
- * Given a sequence with variables and an action:
- *     v1=expr1 v2=expr2 v3=expr3 { v1 + v2 + v3 }
- * replace matching identifiers in the action with the matched values from
- * the sequence
- *)
-let sub_vars_text varmap inputstate text =
-  (* In the default Genlex lexer . is illegal *)
-  let lexer = Genlex.make_lexer ["."] in
-  let tokens = lexer (Stream.of_string text) in
-  let reversed_results = ref [] in
-  let prepend s = reversed_results := s :: !reversed_results in
-  let () =
-    Stream.iter
-      (fun token ->
-        match token with
-        | Genlex.Ident id ->
-          (match List.assoc_opt id varmap with
-            | Some offset ->
-                prepend @@ "yyValue" ^ string_of_int (inputstate + offset)
-            | None -> prepend id)
-        | Genlex.Char c -> prepend ("'" ^ Char.escaped c ^ "'")
-        | Genlex.String s -> prepend ("\"" ^ String.escaped s ^ "\"")
-        | Genlex.Kwd kwd -> prepend kwd
-        | Genlex.Int i -> prepend @@ string_of_int i
-        | Genlex.Float f -> prepend @@ string_of_float f)
-      tokens
-  in
-  String.concat " " @@ List.rev !reversed_results
+
+let define_vars_text varmap inputstate text =
+  varmap
+  |> List.filter
+    (fun (varname,_) ->
+       let poss_ids = Str.(split (regexp "[^A-Za-z0-9_]+") text) in
+       List.mem varname poss_ids)
+    (* The varmap appears to be in rev order (created by fold_left)  *)
+  |> List.rev_map (fun (varname, offset) ->
+        sprintf "let %s = yyValue%d in" varname (inputstate + offset))
+  |> (fun xs -> xs @ [text])
+  |> String.concat " "
+
+
+(* We allow hyphens in identifiers, which are not valid ocaml names *)
+let to_rule_name =
+  function
+  | "-" -> "yy_blank"
+  | name -> Stringext.replace_all name ~pattern:"-" ~with_:"_"
 
 
 (**
@@ -165,9 +155,9 @@ let rec compile_node inputstate =
         )
         ([], 1) es
     in
-    let sub_vars_node = function
-      | Action text -> Action (sub_vars_text varmap inputstate text)
-      | Predicate text -> Predicate (sub_vars_text varmap inputstate text)
+    let define_vars_node = function
+      | Action text -> Action (define_vars_text varmap inputstate text)
+      | Predicate text -> Predicate (define_vars_text varmap inputstate text)
       | other -> other
     in
     let final_ist = (inputstate + List.length es - 1) in
@@ -175,7 +165,7 @@ let rec compile_node inputstate =
       match (List.rev es) with
       | first :: nodes_rev ->
         let compiled_first =
-          compile_node final_ist (sub_vars_node first)
+          compile_node final_ist (define_vars_node first)
         in
         (compiled_first, List.rev nodes_rev)
       | [] ->
@@ -186,7 +176,7 @@ let rec compile_node inputstate =
       List.fold_right
         (fun node (caml_expr, ist) ->
            (CMatchExpr {
-               matchee = (compile_node (ist-1) (sub_vars_node node));
+               matchee = (compile_node (ist-1) (define_vars_node node));
                patlist = [
                  (CCtor ("Ok", [value_n ist; input_n ist; cn_yytext]), caml_expr);
                  (CCtor ("Error", [CName "e"]),
@@ -258,7 +248,7 @@ let rec compile_node inputstate =
   | Name (name, None) -> CApp (CName name, input_n inputstate)
   | Name (name, Some varname)
     -> (*FIXME: Do something with the varname *)
-    CApp (CName name, input_n inputstate)
+    CApp (CName (to_rule_name name), input_n inputstate)
   | Literal lit ->
     CApp (CApp (CName "litmatch", CLit lit), input_n inputstate)
   | Class classlit ->
@@ -268,9 +258,10 @@ let rec compile_node inputstate =
     CApp (CApp (CName "classmatch", CName matchfn_name), input_n inputstate)
   | Any -> CApp (CName "read_any", input_n inputstate)
   | Action text ->
-    (* variables should have been subbed by now *)
+    (* TODO: spit out sourc file line numbers *)
     CCtor ("Ok", [CVerb ("(" ^ text ^ ")"); input_n inputstate; cn_yytext])
   | Predicate text ->
+    (* TODO: spit out sourc file line numbers *)
     CVerb ("if (" ^ text ^ ") then Ok ((), yyInput" ^ (string_of_int inputstate) ^ ", yytext) else Error \"custom predicate failed\"")
 
 
@@ -332,14 +323,12 @@ let compile_rule = function
   | Tree.Rule (name, expr) ->
       let compiled_node = compile_node 0 expr in
       let as_string = string_of_caml 2 compiled_node in
-      Printf.printf "and %s yyInput0 = (\n  %s\n)\n" name as_string
+      Printf.printf "and %s yyInput0 = (\n  %s\n)\n" (to_rule_name name) as_string
   | _ -> assert false
 
 
 let compile_rules (rules : Tree.expr list) =
   (* TODO: create a rule lookup *)
-  (* TODO: check for unmatched names *)
-  (* TODO: check for left recursion *)
   let () = Printf.printf "%s" "
 type string_view = string * int * int
 
@@ -442,6 +431,7 @@ let compile_result result =
       result []
   in
   let () = check_for_undefined rules in
+  (* TODO: check for left recursion *)
   (* Print headers *)
   let () =
     List.iter

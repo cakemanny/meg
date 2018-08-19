@@ -4,8 +4,11 @@
 - [x] Capturing and yytext
 - [ ] Change vars to apply to any node
 - [ ] Allow use of $1, $2, etc
+- [x] Change from text replacement to prepend lets in var definition
 - [ ] Add -o to output flag
 - [ ] line number directives in output
       - [x] header and trailer sections
       - [ ] actions
 - [ ] bitmaps for long character classes
+- [ ] resolve shift/reduce & reduce/reduce conflicts in the menhir grammar
+- [ ] improve error messages in our grammar parser
