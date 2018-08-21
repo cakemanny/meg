@@ -13,4 +13,4 @@
 - [ ] resolve shift/reduce & reduce/reduce conflicts in the menhir grammar
 - [ ] improve error messages in our grammar parser
 - [ ] Check for left recursion
-- [ ] Check for duplicate rules
+- [x] Check for duplicate rules

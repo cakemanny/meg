@@ -456,15 +456,32 @@ let yyMatchAny = yyMatchClass (fun _ -> true)
   List.iter compile_rule rules
 
 
+let rule_names rules =
+  List.map
+    (function
+      | Tree.Rule (name, _) -> name
+      | _ -> assert false)
+    rules
+
+
+let check_for_duplicate (rules: Tree.expr list) =
+  let names : string list = rule_names rules in
+  let (dups, _) =
+    List.fold_left
+      (fun (errs, xs) x ->
+         if List.mem x xs then
+           (x :: errs, xs)
+         else
+           (errs, x :: xs))
+      ([], [])
+      names
+  in
+  dups
+
+
 let check_for_undefined (rules: Tree.expr list) =
   let open Tree in
-  let rule_names =
-    List.map
-      (function
-        | Tree.Rule (name, _) -> name
-        | _ -> assert false)
-      rules
-  in
+  let names = rule_names rules in
   let rec check_rule =
     function
     | Alternate exprs
@@ -478,14 +495,14 @@ let check_for_undefined (rules: Tree.expr list) =
     | Capture expr
     | Assign (_, expr)-> check_rule expr
     | Name name ->
-      if List.mem name rule_names = false
+      if List.mem name names = false
       then (Printf.eprintf "%s is not defined!\n" name; exit 1)
     | Literal _
     | Class _
     | Any
     | Action _
     | Predicate _ -> ()
-in List.iter check_rule rules
+  in List.iter check_rule rules
 
 
 let compile_result result =
@@ -500,6 +517,13 @@ let compile_result result =
       result []
   in
   let () = check_for_undefined rules in
+  let duplicate_rule_names = check_for_duplicate rules in
+  let () = if List.length duplicate_rule_names > 0 then
+      (List.iter
+         (fun name -> Printf.eprintf "Duplicate rules with name %s\n" name)
+         duplicate_rule_names;
+       exit 1)
+  in
   (* TODO: check for left recursion *)
   (* Print headers *)
   let () =
