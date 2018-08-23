@@ -505,6 +505,54 @@ let check_for_undefined (rules: Tree.expr list) =
   in List.iter check_rule rules
 
 
+let rec consumes_input rules_by_name parent_rules =
+  let recur rule = consumes_input rules_by_name parent_rules rule in
+  let open Tree in
+  function
+  | Rule (name, expr) ->
+    if List.mem name parent_rules then
+      (Printf.eprintf "possible infinite left recursion in rule '%s'\n" name; false)
+    else
+      consumes_input rules_by_name (name :: parent_rules) expr
+  | Any -> true
+  | Name name -> recur @@ MapString.find name rules_by_name (* yolo *)
+  | Literal lit -> String.length lit > 0
+  | Class _ -> true
+  | Action _ -> false
+  | Predicate _ -> false
+  | Alternate exprs -> List.for_all recur exprs
+  | Sequence exprs -> List.exists recur exprs
+  | PeekFor _ -> false
+  | PeekNot _ -> false
+  | Optional _ -> false
+  | Repeat _ -> false
+  | NonEmptyRepeat expr -> recur expr
+  | Capture expr -> recur expr
+  | Assign (_, expr) -> recur expr
+
+
+let validate rules =
+  let () = check_for_undefined rules in
+  let duplicate_rule_names = check_for_duplicate rules in
+  let () = if List.length duplicate_rule_names > 0 then
+      (List.iter
+         (Printf.eprintf "Duplicate rules with name %s\n")
+         duplicate_rule_names;
+       exit 1)
+  in let rules_by_name =
+       rules
+       |> List.fold_left
+         (fun map rule ->
+            let name =
+              (match rule with Tree.Rule (name, _) -> name | _ -> assert false)
+            in
+            MapString.add name rule map)
+         MapString.empty
+  in
+  List.iter
+    (fun rule -> ignore(consumes_input rules_by_name [] rule)) rules
+
+
 let compile_result result =
   let open Tree in
   let rules =
@@ -516,15 +564,7 @@ let compile_result result =
          | _ -> xs)
       result []
   in
-  let () = check_for_undefined rules in
-  let duplicate_rule_names = check_for_duplicate rules in
-  let () = if List.length duplicate_rule_names > 0 then
-      (List.iter
-         (Printf.eprintf "Duplicate rules with name %s\n")
-         duplicate_rule_names;
-       exit 1)
-  in
-  (* TODO: check for left recursion *)
+  let () = validate rules in
   (* Print headers *)
   let () =
     List.iter
