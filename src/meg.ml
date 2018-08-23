@@ -377,7 +377,7 @@ let rec compile_classes result_list =
   | Repeat expr
   | NonEmptyRepeat expr
   | Capture expr
-  | Assign (_,expr)
+  | Assign (_, expr)
     -> compile_classes result_list expr
   | Name _
   | Literal _
@@ -520,7 +520,7 @@ let compile_result result =
   let duplicate_rule_names = check_for_duplicate rules in
   let () = if List.length duplicate_rule_names > 0 then
       (List.iter
-         (fun name -> Printf.eprintf "Duplicate rules with name %s\n" name)
+         (Printf.eprintf "Duplicate rules with name %s\n")
          duplicate_rule_names;
        exit 1)
   in
