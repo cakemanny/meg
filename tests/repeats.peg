@@ -1,5 +1,7 @@
 
-rep0: 'a' 'b'* 'c'
+rep0: 'a' bs=[a-bd-z]* 'c' { bs }
+;
+ident: [a-z]
 
 %%
 
@@ -7,21 +9,29 @@ let failed = ref false
 
 let () =
   let is_match = function Ok (_,(_,_,len,_)) -> len=0 | Error _ -> false in
-  let test (rule, input, expected) =
+  let test (rule, input, expected, expected_value) =
     let result = rule (string_view_of_string input) in
-    if is_match result <> expected
-    then (
-      failed := true;
-      Printf.eprintf "Expected \"%s\" to%s match, but it didn't!"
-        input (if expected then "" else " not" )
-      )
-    else ()
+    if is_match result <> expected then
+      (failed := true;
+       Printf.eprintf "Expected \"%s\" to%s match, but it didn't!\n"
+          input (if expected then "" else " not" ))
+    else if expected = true then
+      (let value = function Ok (x,_) -> x | Error _ -> assert false in
+       if value result <> expected_value then
+         Printf.eprintf "Expected %s but was %s\n"
+             ([%derive.show: char list] expected_value)
+             ([%derive.show: char list] (value result))
+       else
+         ())
+    else
+      ()
   in
   List.iter test [
-    rep0, "ac", true;
-    rep0, "abc", true;
-    rep0, "abbc", true;
-    rep0, "abbbc", true;
+    rep0, "ac", true, [];
+    rep0, "abc", true, ['b'];
+    rep0, "abbc", true, ['b';'b'];
+    rep0, "abbbc", true, ['b';'b';'b';];
+    rep0, "amnoc", true, ['m';'n';'o'];
   ];
   if !failed then exit 1 else exit 0
 

@@ -260,7 +260,7 @@ let rec compile_node inputstate =
             CVerb "Error _", CVerb "Ok (res, yyInput0)" ;
           ]
         };
-      subexpr = CApp (CApp (CName "aux", CList []), input_n inputstate)
+      subexpr = CApp (CApp (CName "map_result_value", CName "List.rev"), CApp (CApp (CName "aux", CList []), input_n inputstate))
     }
   | NonEmptyRepeat expr
     -> compile_node inputstate @@ Sequence [expr; Repeat expr]
@@ -434,6 +434,11 @@ let yyMatchClass matchfn (str, off, len, yytext) : char parse_result =
     Error \"nomatch\"
 
 let yyMatchAny = yyMatchClass (fun _ -> true)
+
+let map_result_value fn =
+  function
+  | Ok (v,r) -> Ok (fn v, r)
+  | Error msg -> Error msg
 
 " in
   let classes = List.fold_left compile_classes [] rules in

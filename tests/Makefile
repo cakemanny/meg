@@ -10,11 +10,13 @@ SRCS := actions.peg \
 
 TARGETS := $(SRCS:.peg=.byte)
 
+PACKAGES := ppx_deriving.std,ppx_deriving.show
+
 test: $(TARGETS)
 	$(foreach target,$(TARGETS),./$(target);)
 
 %.byte: %.ml
-	ocamlc -o $@ $<
+	ocamlfind ocamlc -linkpkg -package $(PACKAGES) -o $@ $<
 
 %.ml: %.peg
 	../meg.byte $< > $@
