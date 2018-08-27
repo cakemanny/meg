@@ -1,0 +1,7 @@
+
+rule1: rule2
+
+rule2:  rule3
+
+rule3:  "snap"
+

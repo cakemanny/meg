@@ -9,9 +9,11 @@ let parse filename (action : Tree.grammar -> unit)  =
     let lexbuf = Lexer.set_filename filename lexbuf in
     try
       let result = Parser.grammar Lexer.token lexbuf in
+      Parsing.clear_parser ();
       action result
     with
     | Parser.Error -> Printf.eprintf "It's all gone wrong\n"; exit 1
+    | Syntaxerr.Error err -> Printf.eprintf "%s\n" (Syntaxerr.pp_err err); exit 1
     | Lexer.SyntaxError msg -> Printf.eprintf "%s\n" msg; exit 1
   with e ->
     close_in_noerr channel;
@@ -511,7 +513,8 @@ let rec consumes_input rules_by_name parent_rules =
   function
   | Rule (name, expr) ->
     if List.mem name parent_rules then
-      (Printf.eprintf "possible infinite left recursion in rule '%s'\n" name; false)
+      (Printf.eprintf "possible infinite left recursion in rule '%s'\n" name;
+       false)
     else
       consumes_input rules_by_name (name :: parent_rules) expr
   | Any -> true
