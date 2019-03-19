@@ -3,13 +3,13 @@
 
 open Tree
 
-let sprintf = Printf.sprintf
-
 let unclosed start_pos start_name end_pos end_name =
   raise Syntaxerr.(Error (Unclosed (start_pos, start_name, end_pos, end_name)))
 
+(*
 let expecting pos name =
   raise Syntaxerr.(Error (Expecting (pos, name)))
+*)
 
 let not_expecting pos name =
   raise Syntaxerr.(Error (NotExpecting (pos, name)))

@@ -4,3 +4,7 @@ _build
 # built targets
 meg.byte
 meg.native
+
+# produced by dune
+.merlin
+/*.install

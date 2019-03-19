@@ -19,7 +19,7 @@ test: $(TARGETS)
 	ocamlfind ocamlc -linkpkg -package $(PACKAGES) -o $@ $<
 
 %.ml: %.peg
-	../meg.byte $< > $@
+	dune exec meg $< > $@
 
 .PHONY: clean
 

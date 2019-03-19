@@ -8,7 +8,8 @@ It's based heavily on \_why's [greg](https://github.com/whymirror/greg)
 ## Requirements
 
   * ocaml
-  * ocamlbuild
+  * ocamlbuild (hopefully not for  much longer)
+  * dune
   * Make
 
 ## Required Packages
@@ -21,8 +22,7 @@ These can be installed using `opam` or any other way seen fit
 
 ## Build instructions
 
-Run `make native` or `make byte` for the native and bytecode versions
-respectively.
+Run `dune build @install` to build meg to `_build/install/default/bin/meg`
 
 
 ## Links

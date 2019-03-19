@@ -369,7 +369,7 @@ let compile_class classlit =
 let rec compile_classes result_list =
   let open Tree in
   function
-  | Rule (name, expr) -> compile_classes result_list expr
+  | Rule (_, expr) -> compile_classes result_list expr
   | Alternate exprs
   | Sequence exprs
     -> List.fold_left compile_classes result_list exprs
@@ -577,7 +577,7 @@ let compile_result result =
   let () =
     List.iter
       (function
-        | Declaration (declaration,sp,ep) ->
+        | Declaration (declaration, sp, _ep) ->
           (Printf.printf "# %d \"%s\"\n" sp.pos_lnum sp.pos_fname;
            Printf.printf "%s\n" declaration;
            (* TODO: track output filename and line numbers! *)
@@ -593,7 +593,7 @@ let compile_result result =
     (function
       | Declaration (_,_,_) -> ()
       | Definition _ -> ()
-      | Trailer (trailer, sp, ep) ->
+      | Trailer (trailer, sp, _ep) ->
           (Printf.printf "# %d \"%s\"\n" sp.pos_lnum sp.pos_fname;
            Printf.printf "%s\n" trailer;
            Printf.printf "# %d \"%s\"\n" 0 "<stdout>"))
@@ -605,6 +605,6 @@ let () =
   | [] -> assert false
   | progname :: [] ->
       (Printf.eprintf "usage: %s <filename>\n" progname; exit 1)
-  | progname :: filename :: _ -> begin
+  | _progname :: filename :: _ -> begin
       parse filename compile_result
     end

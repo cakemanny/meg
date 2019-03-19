@@ -1,0 +1,12 @@
+(executable
+ (name meg)
+ (libraries stringext str))
+
+(menhir
+ (modules parser))
+
+(ocamllex lexer)
+
+(install
+ (section bin)
+ (files (meg.exe as meg)))
