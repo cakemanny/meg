@@ -8,9 +8,7 @@ It's based heavily on \_why's [greg](https://github.com/whymirror/greg)
 ## Requirements
 
   * ocaml
-  * ocamlbuild (hopefully not for  much longer)
   * dune
-  * Make
 
 ## Required Packages
 
