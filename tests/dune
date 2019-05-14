@@ -1,0 +1,40 @@
+(* -*- tuareg -*- *)
+
+let test_names = [
+  "actions";
+  "any";
+  "capture";
+  "classes";
+  "literals";
+  "peek";
+  "repeats";
+  "sequences";
+]
+
+let tests = Printf.sprintf "
+(tests
+ (names %s)
+ (flags (:standard -w -27-39))
+ (preprocess (pps ppx_deriving.std ppx_deriving.show)))
+" @@ String.concat " " test_names
+
+let rules =
+  List.map
+    (fun test_name ->
+       Printf.sprintf "
+(rule
+(targets %s.ml)
+(deps    (:meg ../src/meg.exe)
+          (:inputs %s.peg))
+(action  (with-stdout-to %%{targets}
+          (run %%{meg} %%{inputs}))))
+"
+         test_name test_name
+    )
+    test_names
+
+let whole_file =
+  tests ^ (String.concat "\n" rules)
+
+let () =
+  Jbuild_plugin.V1.send whole_file

@@ -24,6 +24,11 @@ These can be installed using `opam` or any other way seen fit
 
 Run `dune build @install` to build meg to `_build/install/default/bin/meg`
 
+## Running the tests
+
+```
+dune runtest
+```
 
 ## Links
 
