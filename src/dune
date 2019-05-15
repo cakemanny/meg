@@ -3,7 +3,8 @@
  (libraries stringext str))
 
 (menhir
- (modules parser))
+ (modules parser)
+ (flags --dump --explain))
 
 (ocamllex lexer)
 

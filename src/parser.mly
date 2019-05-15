@@ -82,9 +82,9 @@ sequence:
 ;
 prefix:
     AMP pred=BRACES { Predicate pred }
-  | AMP s=suffix { PeekFor s }
-  | NOT s=suffix  { PeekNot s }
-  | n=IDENT EQUAL s=suffix { Assign (n, s)  }
+  | AMP s=suffix_no_action { PeekFor s }
+  | NOT s=suffix_no_action { PeekNot s }
+  | n=IDENT EQUAL s=suffix { Assign (n, s) }
   | s=suffix { s }
 ;
 suffix:
@@ -101,6 +101,25 @@ primary:
   | c=CLASS { Class c }
   | DOT { Any }
   | text=BRACES { Action text  }
+  | LT e=expression GT { Capture e }
+;
+/* these are to resolve a reduce/reduce conflict between predicates and
+   peeking an action. it doesn't really make sense to peek or peeknot an action
+   but you can still do it by parenthesising the expression
+ */
+suffix_no_action:
+    p=primary_no_action { p }
+  | p=primary_no_action QUESTION { Optional p }
+  | p=primary_no_action STAR { Repeat p }
+  | p=primary_no_action PLUS { NonEmptyRepeat p }
+;
+primary_no_action:
+    name=IDENT (* !: *) { Name name }
+  | LPAREN e=expression RPAREN { e }
+  | LPAREN expression error { unclosed $startpos($1) "(" $startpos($3) ")" }
+  | l=LITERAL { Literal l }
+  | c=CLASS { Class c }
+  | DOT { Any }
   | LT e=expression GT { Capture e }
 ;
 %%
