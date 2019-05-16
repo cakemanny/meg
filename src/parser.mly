@@ -94,14 +94,8 @@ suffix:
   | p=primary PLUS { NonEmptyRepeat p }
 ;
 primary:
-    name=IDENT (* !: *) { Name name }
-  | LPAREN e=expression RPAREN { e }
-  | LPAREN expression error { unclosed $startpos($1) "(" $startpos($3) ")" }
-  | l=LITERAL { Literal l }
-  | c=CLASS { Class c }
-  | DOT { Any }
+    p=primary_no_action { p }
   | text=BRACES { Action text  }
-  | LT e=expression GT { Capture e }
 ;
 /* these are to resolve a reduce/reduce conflict between predicates and
    peeking an action. it doesn't really make sense to peek or peeknot an action
