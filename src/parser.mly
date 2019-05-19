@@ -115,5 +115,6 @@ primary_no_action:
   | c=CLASS { Class c }
   | DOT { Any }
   | LT e=expression GT { Capture e }
+  | LT expression error { unclosed $startpos($1) "<" $startpos($3) ">" }
 ;
 %%
