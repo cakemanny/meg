@@ -65,7 +65,7 @@ trailer:
     t=TRAILER { let (cnts,startp,endp) = t in Trailer (cnts,startp,endp) }
 ;
 definition:
-    n=def_start e=expression SEMI? { Definition (Rule (n,e)) }
+    n=def_start e=expression SEMI { Definition (Rule (n,e)) }
   | COLON { not_expecting $startpos($1) ":" }
   | error { general_err $startpos "a definition was bad!" }
 ;

@@ -2,6 +2,7 @@
 parse1: "hello"
 ;
 parse2: "hallo"
+;
 
 %%
 

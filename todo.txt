@@ -11,7 +11,7 @@
       - [ ] actions
 - [ ] bitmaps for long character classes
 - [x] resolve reduce/reduce conflicts in the menhir grammar
-- [ ] resolve shift/reduce conflicts in the menhir grammar
+- [x] resolve shift/reduce conflicts in the menhir grammar
 - [ ] improve error messages in our grammar parser
 - [x] Check for left recursion
 - [x] Check for duplicate rules

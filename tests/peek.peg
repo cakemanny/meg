@@ -5,6 +5,7 @@ peek_for: &[ab] [bc]
 peek_not: ![ab] [bc]
 ;
 peek_end: "rosy" !.
+;
 
 %%
 

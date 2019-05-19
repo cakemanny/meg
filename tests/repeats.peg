@@ -2,6 +2,7 @@
 rep0: 'a' bs=[a-bd-z]* 'c' { bs }
 ;
 ident: [a-z]
+;
 
 %%
 
