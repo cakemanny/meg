@@ -53,7 +53,6 @@ let char        = '\\' ['b' 'n' 'r' 't' '\'' '"' '[' ']' '\\']
                 | '\\' ['0'-'7']['0'-'7']?
                 | [^ '\\' '[' ']']
 let range       = char '-' char | char
-let clazz       = '[' range* ']'
 
 let comment
   = '#' [^ '\n']* '\n'
@@ -77,10 +76,8 @@ rule _token = parse
   | identifier as i   {IDENT i}
   | '"'  {read_literal_dbl (Buffer.create 17) lexbuf}
   | '\'' {read_literal_sgl (Buffer.create 17) lexbuf}
-  | clazz as lxm { for i = 0 to (String.length lxm) - 1 do
-                     if lxm.[i] = '\n' then Lexing.new_line lexbuf
-                   done;
-                   CLASS (String.sub lxm 1 @@ String.length lxm - 2 )}
+  | '['  { CLASS (Buffer.contents @@ read_clazz (Buffer.create 32) lexbuf) }
+  | ']'  { error lexbuf "Unmatched ']'" }
   | '='  {EQUAL}
   | ':'  {COLON}
   | ';'  {SEMI}
@@ -149,6 +146,14 @@ and read_braces level buf =
 | '\n'{ Buffer.add_char buf '\n'; Lexing.new_line lexbuf; read_braces level buf lexbuf }
 | _ as c { Buffer.add_char buf c; read_braces level buf lexbuf }
 | eof { error lexbuf "Action not terminated" }
+
+and read_clazz buf =
+  parse
+| ']' { buf }
+| range* as lxm { Buffer.add_string buf lxm; read_clazz buf lexbuf }
+| '\\' { error lexbuf "Bad escape sequence" }
+| _ as c { error lexbuf "Illegal character in character class: %c" c }
+| eof { error lexbuf "Class not terminated" }
 
 (* *)
 and class_token =
