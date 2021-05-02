@@ -5,6 +5,28 @@ meg is mostly an OCaml implementation of a
 generator.
 It's based heavily on \_why's [greg](https://github.com/whymirror/greg)
 
+Besides actions being written in OCaml,
+the primary difference is that actions are expressions
+rather than statements.
+
+So, with meg one would write
+```
+Expression
+    : a=Product '+' b=Expression { a + b }
+    | a=Product '-' b=Expression { a - b }
+    ;
+```
+as opposed to, in leg/greg:
+```
+Expression
+    = a:Product '+' b:Expression { $$ = a + b; }
+    | a:Product '-' b:Expression { $$ = a - b; }
+```
+
+See <samples/desk_calc.peg> for a full translation
+of the desk calculator example
+from the [peg/leg man page](https://piumarta.com/software/peg/peg.1.html).
+
 ## Installation
 ```
 opam install .
