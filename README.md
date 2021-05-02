@@ -5,27 +5,28 @@ meg is mostly an OCaml implementation of a
 generator.
 It's based heavily on \_why's [greg](https://github.com/whymirror/greg)
 
-## Requirements
-
-  * ocaml
-  * dune
-
-## Required Packages
-
-These can be installed using `opam` or any other way seen fit
-
-  * Menhir
-  * Stringext
-
-
-## Build instructions
-
-Run `dune build @install` to build meg to `_build/install/default/bin/meg`
-
-## Running the tests
-
+## Installation
 ```
+opam install .
+```
+
+## Example use
+```
+meg samples/desk_calc.peg > samples/desk_calc.ml
+ocamlc -o samples/desk_calc samples/desk_calc.ml
+```
+
+## Hacking
+To install the dependencies and test dependencies without installing `meg`:
+```
+opam install . --deps-only --with-test
+```
+
+Then building and testing can be run with dune:
+```
+dune build
 dune runtest
+dune exec meg ...
 ```
 
 ## Links

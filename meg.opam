@@ -6,6 +6,25 @@ homepage: "https://github.com/cakemanny/meg"
 bug-reports: "https://github.com/cakemanny/meg/issues"
 dev-repo: "git+https://github.com/cakemanny/meg.git"
 license: "MIT"
+depends: [
+    "ocaml" {>= "4.06.1"}
+    "dune" {>= "1.6"}
+    "menhir"
+    "stringext"
+    "ppx_deriving" {with-test}
+]
 build: [
     ["dune" "build" "-p" name "-j" jobs]
 ]
+run-test: [
+    ["dune" "runtest"]
+]
+synopsis: "An OCaml implementation of a PEG parser generator"
+description: """
+meg is an OCaml implementation of a
+[PEG](https://pdos.csail.mit.edu/papers/parsing%3Apopl04.pdf) based parser
+generator.
+It's based heavily on \\_why's [greg](https://github.com/whymirror/greg)
+
+See samples/desk_calc.peg in repo for details on the grammar specifics
+"""
