@@ -23,7 +23,7 @@ Expression
     | a:Product '-' b:Expression { $$ = a - b; }
 ```
 
-See <samples/desk_calc.peg> for a full translation
+See [samples/desk_calc.peg](samples/desk_calc.peg) for a full translation
 of the desk calculator example
 from the [peg/leg man page](https://piumarta.com/software/peg/peg.1.html).
 
